@@ -1,19 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8">
-  <title>transplayer</title>
-</head>
-
-<body style="overflow:hidden">
-
-  <video id="vid" loop autoplay style="position: fixed; left: 0; top: 0; width: 100%; height: 100%;">
-    <source src="C:\Users\cheng\Desktop\demot.webm" type="video/webm" />
-  </video>
-
-  <script src="index.js"></script>
-
-</body>
-
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file:; connect-src ws://127.0.0.1:8080" />
+    <title>Transplayer</title>
+  </head>
+  <body style="margin: 0; overflow: hidden; background: transparent">
+    <video id="vid" playsinline loop preload="auto"
+      style="position: fixed; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill;"></video>
+    <script src="../node_modules/osc-js/lib/osc.min.js"></script>
+    <script src="index.js"></script>
+  </body>
 </html>

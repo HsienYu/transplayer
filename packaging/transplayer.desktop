@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Transplayer
+Comment=Elephants and Stones dual-display installation
+Exec=AppRun
+Icon=transplayer
+Terminal=false
+Categories=AudioVideo;

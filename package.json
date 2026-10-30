@@ -1,10 +1,12 @@
 {
   "name": "transplayer",
+  "productName": "Elephants and Stones",
   "version": "1.0.0",
   "description": "transducent & mouse click through player",
   "main": "main.js",
   "scripts": {
-    "start": "electron . --enable-transparent-visuals"
+    "test": "node --test tests/*.test.js",
+    "start": "electron . --enable-transparent-visuals --disable-setuid-sandbox"
   },
   "repository": {
     "type": "git",
@@ -12,7 +14,8 @@
   },
   "keywords": [
     "transparent",
-    "player"
+    "player",
+    "selenium"
   ],
   "author": "chenghsienyu",
   "license": "Artistic-2.0",
@@ -21,9 +24,10 @@
   },
   "homepage": "https://github.com/HsienYu/transplayer#readme",
   "devDependencies": {
-    "electron": "^6.0.12"
+    "electron": "9.3.2"
   },
   "dependencies": {
-    "node-gyp": "^6.0.0"
+    "osc-js": "2.1.0",
+    "selenium-webdriver": "4.0.0-alpha.7"
   }
 }

@@ -1,0 +1,6 @@
+{
+  "videoPath": "../transplayer-master/video/stonesandelephants.webm",
+  "startSeconds": 775,
+  "expectedWidth": 2160,
+  "expectedHeight": 1920
+}

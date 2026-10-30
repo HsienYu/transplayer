@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export TRANSPLAYER_CHROME="$ROOT/browser/chrome"
+export TRANSPLAYER_DRIVER="$ROOT/app/bin/chrome/chromedriver"
+export TRANSPLAYER_PROFILE_DIR="${TRANSPLAYER_PROFILE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/transplayer/profiles}"
+export TRANSPLAYER_CONFIG="${TRANSPLAYER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/transplayer/config.json}"
+unset ELECTRON_RUN_AS_NODE
+exec "$ROOT/runtime/electron" "$ROOT/app" --enable-transparent-visuals --disable-setuid-sandbox "$@"
