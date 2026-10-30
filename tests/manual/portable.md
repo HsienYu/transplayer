@@ -16,8 +16,10 @@ the task conversation.
    record before and after verification; never modify the file.
 3. Confirm no listener on localhost:8080 and no existing instance of this
    release. If occupied, stop; do not kill an unknown process.
-4. Check runtime versions: Electron 9.3.2, Node 12.14.1, Chrome and ChromeDriver
-   87.0.4280.88. Verify release checksums and missing shared libraries.
+4. Check runtime versions against the release's `VERSIONS.json`: r7b uses
+   Electron 9.3.2, Node 12.14.1 and matching Chrome/ChromeDriver 156.0.8078.80.
+   Historical r4/r6 use Chrome87. Do not mix binaries across releases.
+   Verify release checksums and missing shared libraries.
 
 ## Bounded validation
 
@@ -35,14 +37,19 @@ the task conversation.
    External websites may have changed since 2020; report any failures.
 6. Stop through the app control. Expect zero owned child/browser processes,
    no listener on 8080, and the unrelated desktop unchanged.
-7. Verify top bar and all Ubuntu Dock actors are hidden while playing and
-   restored to their prior visibility after stop. Run the separate
+7. Verify the top bar is hidden while playing and restored after stop.
+   The Dock retains native smart hiding, ignoring only the transparent
+   player's PID. Verify shown/hidden/shown behavior using `dock-smoke.js`.
+   Run the separate
    `desktop-smoke.js` probe to verify restoration on parent IPC disconnection.
    This mechanism targets GNOME 3.28; it does not claim support on newer GNOME.
 
-For port checks, use `ss -ltn` or a Node `net.Server` bind. A raw Python socket
-without `SO_REUSEADDR` can fail on a closed connection's TIME_WAIT even when
-no listener exists; do not misreport that as a leaked controller.
+On the installation host `ss` has segfaulted. Read `/proc/net/tcp` and
+`/proc/net/tcp6` for port `1F90` (8080) with listener state `0A`, or use a
+Node `net.Server` bind with error handling. Inspect the check's exit status,
+not just empty output. A raw Python socket without `SO_REUSEADDR` can fail
+on a closed connection's TIME_WAIT even when no listener exists.
+Do not misreport that as a leaked controller.
 
 ## Full exhibition verification (requires user observation)
 
@@ -60,5 +67,8 @@ until it has passed its own playback check.
 
 ## Evidence
 
-Pending. Store complete command/test output in the ignored `evidence/`
-directory and report relevant paths and results in the task conversation.
+This is the reusable protocol, not a statement that every release passed.
+Store complete command/test output in the ignored `evidence/` directory and
+report relevant paths and results in the task conversation.
+See `google-r7.md` for actual r7b results and the accepted CAPTCHA limitation;
+do not interpret accepted external failure as successful image search.

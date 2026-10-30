@@ -21,6 +21,7 @@ const timer = setTimeout(() => { child.kill("SIGTERM"); process.exitCode = 1; },
 child.on("message", message => {
   assert.equal(message.ready, true);
   assert.equal(evaluate("!!global._transplayerDesktop && global._transplayerDesktop.items.every(function(i){return !i.actor.visible;})"), "(true, 'true')");
+  assert.equal(evaluate("global._transplayerDesktop.dockFilters.length > 0 && global._transplayerDesktop.dockFilters.every(function(h){return h.target._handledWindow === h.wrapper;})"), "(true, 'true')");
   ready = true;
   // A lost parent IPC channel follows the same restoration path as an app crash.
   child.disconnect();

@@ -92,7 +92,9 @@ if (!app.requestSingleInstanceLock()) {
         });
       });
       if (stopping) return;
-      desktopGuard = fork(path.join(__dirname, "desktop-guard.js"), [], {
+      desktopGuard = fork(path.join(__dirname,
+        process.env.TRANSPLAYER_DESKTOP_BACKEND === "gnome49" ?
+          "desktop-modern-guard.js" : "desktop-guard.js"), [], {
         cwd: __dirname, execPath: process.execPath,
         env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: "1" }),
       });

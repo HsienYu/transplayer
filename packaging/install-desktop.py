@@ -7,13 +7,17 @@ from pathlib import Path
 import subprocess
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--appimage", required=True, type=Path)
+entrypoint = parser.add_mutually_exclusive_group(required=True)
+entrypoint.add_argument("--appimage", type=Path, help="Historical portable AppImage")
+entrypoint.add_argument("--executable", type=Path, help="Verified versioned AppDir/AppRun")
 parser.add_argument("--video", required=True, type=Path)
 args = parser.parse_args()
-image = args.appimage.resolve(strict=True)
+image = (args.executable or args.appimage).resolve(strict=True)
 video = args.video.resolve(strict=True)
 if not image.is_file() or not video.is_file():
     raise SystemExit("AppImage and video must be files")
+if args.executable and not os.access(image, os.X_OK):
+    raise SystemExit("AppDir entrypoint must be executable")
 home = Path.home()
 configdir = home / ".config/transplayer"
 config = configdir / "config.json"

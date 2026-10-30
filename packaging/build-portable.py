@@ -8,10 +8,13 @@ import shutil
 import struct
 import subprocess
 import zlib
+import tempfile
+from browser_bundle import prepare_browser
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--legacy", required=True, type=Path)
-parser.add_argument("--chrome", required=True, type=Path)
+parser.add_argument("--browser-archives", required=True, type=Path,
+                    help="Directory containing the three checksum-locked browser/extension archives")
 parser.add_argument("--output", required=True, type=Path)
 args = parser.parse_args()
 source = Path(__file__).resolve().parents[1]
@@ -20,17 +23,18 @@ output = args.output.resolve()
 if output.exists():
     raise SystemExit("Output already exists; use a new version directory")
 expected = {
-    "electron": "9.3.2", "osc-js": "2.1.0",
+    "electron": "45.1.0", "osc-js": "2.1.0",
     "selenium-webdriver": "4.0.0-alpha.7",
 }
 for name, version in expected.items():
     actual = json.loads((legacy / "node_modules" / name / "package.json").read_text(encoding="utf-8"))["version"]
     if actual != version:
         raise SystemExit("Version mismatch: " + name)
-for binary in [args.chrome / "chrome", legacy / "bin/chrome/chromedriver"]:
-    version = subprocess.check_output([str(binary), "--version"]).decode()
-    if "87.0.4280.88" not in version:
-        raise SystemExit("Browser/driver version mismatch")
+browser_lock = json.loads((source / "packaging/browser-toolchain.json").read_text(encoding="utf-8"))
+# Keep temporary extraction alive until copying completes, including error cleanup.
+browser_stage = tempfile.TemporaryDirectory(prefix="transplayer-browser-")
+chrome, driver, extension = prepare_browser(
+    args.browser_archives.resolve(), Path(browser_stage.name), browser_lock)
 lock = json.loads((source / "package-lock.json").read_text(encoding="utf-8"))
 for relative, metadata in lock["packages"].items():
     if not relative or metadata.get("dev"):
@@ -44,12 +48,14 @@ for relative, metadata in lock["packages"].items():
 output.mkdir(parents=True)
 app = output / "app"
 app.mkdir()
-for name in ["main.js", "portable.js", "desktop-state.js", "desktop-guard.js", "controller.js",
+for name in ["main.js", "portable.js", "desktop-state.js", "desktop-guard.js",
+             "desktop-modern-guard.js", "desktop-client.js", "chrome-session.js", "controller.js",
              "sub-process.js", "web-process-new.js", "package.json", "package-lock.json"]:
     shutil.copy2(str(source / name), str(app / name))
 shutil.copytree(str(source / "app"), str(app / "app"))
+shutil.copytree(str(source / "packaging/gnome49"), str(output / "gnome49"))
 shutil.copytree(str(legacy / "node_modules/electron/dist"), str(output / "runtime"))
-shutil.copytree(str(args.chrome), str(output / "browser"),
+shutil.copytree(str(chrome), str(output / "browser"),
                 ignore=shutil.ignore_patterns("cron", "default-app-block"))
 # Copy locked non-dev packages only; nested dependencies are copied with their parent.
 for relative, metadata in lock["packages"].items():
@@ -61,8 +67,9 @@ for relative, metadata in lock["packages"].items():
         shutil.copytree(str(legacy / relative), str(destination),
                         ignore=shutil.ignore_patterns("._*", ".cache"))
 (app / "bin/chrome").mkdir(parents=True)
-shutil.copy2(str(legacy / "bin/chrome/chromedriver"), str(app / "bin/chrome/chromedriver"))
-shutil.copy2(str(legacy / "1.23.0_0.crx"), str(app / "1.23.0_0.crx"))
+shutil.copy2(str(driver), str(app / "bin/chrome/chromedriver"))
+shutil.copy2(str(extension), str(app / "nopecha-0.6.1.zip"))
+browser_stage.cleanup()
 for name in ["AppRun", "transplayer.desktop", "transplayer.svg"]:
     shutil.copy2(str(source / "packaging" / name), str(output / name))
 # AppDir specification requires a raster .DirIcon; generate it without image dependencies.
@@ -87,9 +94,12 @@ for file in output.rglob("*"):
         file.chmod(file.stat().st_mode & 0o777)
 shutil.copy2(str(source / "config.example.json"), str(output / "config.example.json"))
 (output / "VERSIONS.json").write_text(json.dumps({
-    "runtime": expected, "node": "12.14.1",
-    "chrome": "87.0.4280.88", "chromedriver": "87.0.4280.88",
-    "platform": "linux-x64", "baseline": "Ubuntu 18.04 / glibc 2.27",
+    "runtime": expected, "node": "24.22.1",
+    "chrome": browser_lock["version"], "chromedriver": browser_lock["version"],
+    "browserToolchain": browser_lock,
+    "platform": "linux-x64", "baseline": "Ubuntu 25.10 / GNOME 49 / Wayland + Xwayland",
+    "installation": "Root-owned versioned AppDir with exact-path AppArmor userns profiles",
+    "browserBackend": "chrome-first", "profileGeneration": "r9-basic", "passwordStore": "basic",
 }, indent=2) + "\n")
 with (output / "SHA256SUMS").open("w") as manifest:
     for file in sorted(output.rglob("*")):

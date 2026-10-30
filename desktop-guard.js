@@ -2,13 +2,15 @@ const { execFileSync } = require("child_process");
 const crypto = require("crypto");
 const { desktopScript } = require("./desktop-state");
 const owner = crypto.randomBytes(16).toString("hex");
+// Capture before a parent disconnect can reparent this guard to init.
+const overlayPid = process.ppid;
 let stopped = false;
 
 function call(action) {
   const output = execFileSync("gdbus", [
     "call", "--session", "--dest", "org.gnome.Shell",
     "--object-path", "/org/gnome/Shell", "--method", "org.gnome.Shell.Eval",
-    desktopScript(action, owner),
+    desktopScript(action, owner, overlayPid),
   ], {
     encoding: "utf8", timeout: 5000,
     env: Object.assign({}, process.env, {

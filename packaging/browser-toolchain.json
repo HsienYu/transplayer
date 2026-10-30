@@ -1,0 +1,22 @@
+{
+  "version": "156.0.8078.80",
+  "chrome": {
+    "file": "chrome.zip",
+    "directory": "chrome-linux64",
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.80/linux64/chrome-linux64.zip",
+    "sha256": "b711c720f774be355197f32edf37e0651418ba036d92446ee2da19ac017540a7"
+  },
+  "chromedriver": {
+    "file": "chromedriver.zip",
+    "directory": "chromedriver-linux64",
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.80/linux64/chromedriver-linux64.zip",
+    "sha256": "cae58bbd262ba5c8a0ce2540f44254b6e789efc4fe9b18bbb4a00487a9f5859e"
+  },
+  "extension": {
+    "file": "nopecha-0.6.1-chromium.zip",
+    "url": "https://github.com/NopeCHALLC/nopecha-extension/releases/download/0.6.1/chromium.zip",
+    "sha256": "cfbbe7b3a3d28939abe92fd7b194ae89e39aad6a286d1df89b9eed9ea2bf612e",
+    "version": "0.6.1",
+    "manifest_version": 3
+  }
+}

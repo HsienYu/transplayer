@@ -158,6 +158,7 @@ class Controller {
       driver: null,
       scrollState: -1,
       pid: -1,
+      session: null,
     };
   }
   isCreating = false;
@@ -180,6 +181,10 @@ class Controller {
 
     try {
       const TIMEOUT = 1000 * 5;
+      const backend = process.env.TRANSPLAYER_BROWSER_BACKEND || "webdriver";
+      if (!["webdriver", "chrome-first"].includes(backend)) {
+        throw new Error("Unsupported browser backend");
+      }
 
       createIfNotExists =
         (createIfNotExists === undefined) | createIfNotExists ? true : false;
@@ -188,6 +193,13 @@ class Controller {
         (this.useLocalProfile === undefined) | this.useLocalProfile
           ? true
           : false;
+      const current = this.browsers[theId];
+      if (backend === "chrome-first" && current && current.session &&
+          current.session.child &&
+          (current.session.child.exitCode !== null ||
+           current.session.child.signalCode !== null)) {
+        if (!await this.closeBrowser(theId)) return null;
+      }
 
       if (!this.browsers[theId]) {
         if (!createIfNotExists) {
@@ -196,6 +208,29 @@ class Controller {
         }
 
         this.browsers[theId] = Controller.__createDefaultBrowser();
+        if (backend === "chrome-first") {
+          const { ChromeSession } = require("./chrome-session");
+          const entry = this.browsers[theId];
+          entry.session = new ChromeSession({
+            chromePath: process.env.TRANSPLAYER_CHROME,
+            driverPath,
+            profileDir: path.join(process.env.TRANSPLAYER_PROFILE_DIR ||
+              path.join(os.homedir(), ".local/share/transplayer/profiles-r9-basic"), `se_${theId}`),
+            env: process.env,
+          });
+          try {
+            await entry.session.start();
+            if (this.browsers[theId] !== entry) throw new Error("Browser stopped during creation");
+            entry.driver = entry.session.driver;
+            await entry.driver.manage().setTimeouts({ implicit: TIMEOUT, pageLoad: 20000, script: 10000 });
+            return entry.driver;
+          } catch (error) {
+            try { await entry.session.close(); }
+            catch (cleanupError) { console.error("Chrome creation cleanup failed", cleanupError); }
+            if (this.browsers[theId] === entry) this.browsers[theId] = null;
+            throw error;
+          }
+        }
 
         let options = new Options();
         if (process.env.TRANSPLAYER_CHROME) {
@@ -214,18 +249,18 @@ class Controller {
         if (useLocalProfile) {
           let home_dir = os.homedir();
           let full_path = path.join(
-            process.env.TRANSPLAYER_PROFILE_DIR || path.join(home_dir, ".local/share/transplayer/profiles"),
+            process.env.TRANSPLAYER_PROFILE_DIR || path.join(home_dir, ".local/share/transplayer/profiles-r7"),
             `se_${theId}`
           );
           args.push(`--user-data-dir=${full_path}`);
         }
-        var ext = path.join(__dirname, "./1.23.0_0.crx");
+        if (process.env.TRANSPLAYER_DESKTOP_BACKEND === "gnome49") {
+          args.push("--ozone-platform=x11");
+        }
         options.addArguments(args);
-        // if (theId != 4) {
-        //   options.addExtensions(encodeExt(ext));
-        // }
-
-        options.addExtensions(encodeExt(ext));
+        if (process.env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION !== "1") {
+          options.addExtensions(encodeExt(path.join(__dirname, "nopecha-0.6.1.zip")));
+        }
         options.excludeSwitches(["enable-automation"]);
 
 
@@ -337,7 +372,8 @@ class Controller {
     try {
       this.browsers[theId].pid = -1;
       if (this.browsers[theId]) this.browsers[theId].scrollState = -1;
-      if (this.browsers[theId].driver) await this.browsers[theId].driver.quit();
+      if (this.browsers[theId].session) await this.browsers[theId].session.close();
+      else if (this.browsers[theId].driver) await this.browsers[theId].driver.quit();
 
       this.browsers[theId] = null;
       return true;

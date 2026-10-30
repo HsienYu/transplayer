@@ -1,0 +1,7 @@
+{
+  "uuid": "transplayer-desktop@transplayer.local",
+  "name": "Transplayer Exhibition Desktop",
+  "description": "Owned, temporary panel and Ubuntu Dock integration for Transplayer.",
+  "shell-version": ["49"],
+  "version": 2
+}

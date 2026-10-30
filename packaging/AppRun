@@ -3,7 +3,9 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export TRANSPLAYER_CHROME="$ROOT/browser/chrome"
 export TRANSPLAYER_DRIVER="$ROOT/app/bin/chrome/chromedriver"
-export TRANSPLAYER_PROFILE_DIR="${TRANSPLAYER_PROFILE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/transplayer/profiles}"
+export TRANSPLAYER_PROFILE_DIR="${TRANSPLAYER_PROFILE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/transplayer/profiles-r9-basic}"
 export TRANSPLAYER_CONFIG="${TRANSPLAYER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/transplayer/config.json}"
+export TRANSPLAYER_DESKTOP_BACKEND="${TRANSPLAYER_DESKTOP_BACKEND:-gnome49}"
+export TRANSPLAYER_BROWSER_BACKEND="${TRANSPLAYER_BROWSER_BACKEND:-chrome-first}"
 unset ELECTRON_RUN_AS_NODE
-exec "$ROOT/runtime/electron" "$ROOT/app" --enable-transparent-visuals --disable-setuid-sandbox "$@"
+exec "$ROOT/runtime/electron" "$ROOT/app" --ozone-platform=x11 --enable-transparent-visuals --disable-setuid-sandbox "$@"

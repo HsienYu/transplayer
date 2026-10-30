@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/HsienYu/transplayer#readme",
   "devDependencies": {
-    "electron": "9.3.2"
+    "electron": "45.1.0"
   },
   "dependencies": {
     "osc-js": "2.1.0",
