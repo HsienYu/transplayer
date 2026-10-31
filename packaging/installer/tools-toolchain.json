@@ -1,0 +1,14 @@
+{
+  "node": {
+    "version": "24.22.2",
+    "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-linux-x64.tar.xz",
+    "sha256": "48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75",
+    "checksums": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt"
+  },
+  "pm2": {
+    "version": "7.1.1",
+    "lockfile": "../supervisor/package-lock.json",
+    "license": "AGPL-3.0",
+    "source": "https://registry.npmjs.org/pm2/7.1.1"
+  }
+}

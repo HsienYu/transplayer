@@ -1,0 +1,9 @@
+{
+  "name": "transplayer-private-supervisor",
+  "version": "1.1.0-rc1",
+  "private": true,
+  "description": "Build-time inputs only; never installed by the end user",
+  "dependencies": {
+    "pm2": "7.1.1"
+  }
+}

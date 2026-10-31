@@ -51,6 +51,38 @@ test("Chrome-first starts normal Chrome before connecting and owns every resourc
     ["quit", "browser-close", "service-stop"]);
 });
 
+test("exhibition Chrome suppresses the crash restore bubble on initial launch", async () => {
+  const f = fixture(), session = new (load().ChromeSession)(f.options, f.deps);
+  try {
+    await session.start();
+    const args = f.calls.find(c => c[0] === "spawn")[2];
+    assert(args.includes("--hide-crash-restore-bubble"));
+    assert(!args.includes("--restore-last-session"));
+    assert.equal(args.filter(a => a.startsWith("--user-data-dir=")).length, 1);
+  } finally {
+    await session.close();
+  }
+});
+
+test("replacement Chrome suppresses restore UI while reusing the dedicated profile", async () => {
+  const f = fixture(), session = new (load().ChromeSession)(f.options, f.deps);
+  await session.start();
+  f.child.signalCode = "SIGKILL";
+  await session.close();
+  const replacement = fixture();
+  replacement.options.profileDir = f.options.profileDir;
+  const next = new (load().ChromeSession)(replacement.options, replacement.deps);
+  try {
+    await next.start();
+    const args = replacement.calls.find(c => c[0] === "spawn")[2];
+    assert(args.includes("--hide-crash-restore-bubble"));
+    assert(args.includes("--user-data-dir=" + f.options.profileDir));
+    assert(!args.includes("--restore-last-session"));
+  } finally {
+    await next.close();
+  }
+});
+
 test("basic storage refuses an existing unclaimed browser profile", () => {
   const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
   const { ChromeSession } = load();

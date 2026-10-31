@@ -1,10 +1,81 @@
 # Verification
 
 Run `npm test` (or `node --test tests/*.test.js`) with Node 18 or newer and
-Python 3 on the development machine. The test runner is built in; no test
+Python 3.10+ on the development machine. The test runner is built in; no test
 package is installed, and the Python tests use only its standard library.
-The new Ubuntu25 target bundles Electron45.1.0 / Node24.22.1; existing pure
-modules retain Node12-compatible syntax for the historical installation.
+The r10 target is Ubuntu26.04 amd64 / GNOME50. Its application retains
+Electron45.1.0 / embedded Node24.22.1; the separate supervisor uses
+Node24.22.2 / PM2 7.1.1. Existing pure modules retain Node12-compatible
+syntax for the historical installation.
+
+## r10 installer / Ubuntu 26.04 candidate
+
+`installer.test.js` invokes `installer_cases.py` with Python's standard
+`unittest`. Run it directly with `python3 tests/installer_cases.py`.
+It covers private/idempotent settings, explicit replacement/backup,
+foreign/legacy state, symlink and command-injection inputs, write rollback,
+real cross-process account-lock blocking, safe diagnostic export, malformed
+PM2 state, bounded login readiness, GDK initialization/probe isolation,
+individual monitor geometry, input manifests (including nested manifests),
+safe Node archive extraction, synthetic staging, and mocked maintenance
+configure failure/retry plus process-scan refusal.
+Fixtures use standard-library temporary directories inside the Python suite;
+no real media, personal browser data or credentials.
+GTK widgets, real PM2/exec FD inheritance, AppArmor, apt/dpkg and physical
+desktop behavior are **not** exercised by these portable tests.
+The one Node wrapper test is not 39 separate Node tests.
+
+Acceptance criteria: [Ubuntu26 installation protocol](manual/ubuntu26-installation.md),
+which remains **NOT EXECUTED**. The user deferred new-hardware testing;
+Ubuntu25 results below cannot satisfy it.
+New logic needs happy/edge/error cases and hostile trust-boundary inputs.
+Ignored `evidence/` retains `tools-green.log` (23 tests),
+`hardening-red.log` / `hardening-green.log` (32 tests after fixes),
+and `desktop-boundary-red.log` / `desktop-boundary-green.log`
+(36 tests after fixes). Failed logs are preserved, never rewritten.
+`maintenance-reentry-red.log` / `maintenance-reentry-green.log` add
+mocked install/upgrade/configure ordering, wrong-platform refusal,
+idempotent AppArmor removal and accurate r10 metadata (39 tests after fixes).
+The historical Node baseline is 97; r10 adds one Python-suite wrapper.
+The final phase-one run passed **98 Node tests, 0 failures, 0 skipped**;
+the separately executed Python suite passed **39 tests (OK)**.
+Full output: `evidence/r10-final-full-tests.log` and
+`evidence/maintenance-reentry-green.log`.
+Static checks passed 41 local documentation links, 17 shell examples,
+Python/JSON/JavaScript/shell syntax and complete historical README preservation
+(`evidence/r10-final-static-checks.log`).
+Gitleaks scanned all 77 tracked/untracked nonignored source candidates with
+no leaks found (`evidence/r10-gitleaks.log`).
+These results do not create or validate a real Linux package.
+
+### Direction confirmation and crash-restore suppression
+
+Latest portable run: **100 Node tests, 0 failures, 0 skipped**, including
+one wrapper running **48 Python tests (OK)**. Complete output:
+`evidence/r10-display-restore-full-tests.log` and
+`evidence/r10-display-lifecycle-green.log`.
+`chrome-session.test.js` adds initial/replacement launch checks for
+`--hide-crash-restore-bubble` without restoring old tabs.
+`installer_cases.py` adds direction-only pattern planning from logical
+geometry, independent rotation metadata, reversed enumeration/negative
+origins, malformed/mirrored/gapped/offset layout rejection, fixed settings
+launcher, active-controller/lease refusal, both-lock lifetimes, CLI/root
+gates, and mocked GTK Escape/button/destroy/timeout/layout/fullscreen-failure
+and partial-construction cleanup. The package fixture checks the new helper
+and display-settings dependency.
+All GTK objects here are mocked; this is **not** a real window-placement,
+rotation, power-loss or browser-bubble acceptance test.
+Seam alignment is not required by the user.
+Red output is retained in `evidence/r10-restore-bubble-red.log`,
+`evidence/r10-display-setup-red.log` and
+`evidence/r10-display-lifecycle-red.log`. Four actual rotation combinations,
+direction/side appearance, restart persistence and browser-level crash UI
+remain **NOT EXECUTED** under the Ubuntu26 manual protocol.
+
+See [development](../docs/development.md) and [operations](../docs/operations.md)
+for build provenance, release blockers and maintenance boundaries.
+
+## Historical r9 and earlier verification
 
 `portable.test.js` covers the agreed 2160×1920 display union, negative
 coordinates, external UTF-8 media configuration, invalid input, and hostile
