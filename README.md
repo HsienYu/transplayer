@@ -17,7 +17,19 @@ Video timecodes drive live Google image-search windows, placement and scrolling.
 - 作品要求兩台各 **1080×1920**，左右合成 **2160×1920**、縮放 100%
 - RustDesk **1.5.0** 已由使用者實測連線成功，TeamViewer 已移除
 
-**現行版本為 r9 stage3，由 PM2 管理；受控瀏覽器回復已通過，代表性長時間 soak 尚未完成。**
+**現行版本為 r9 stage3 Release Candidate（RC／現場試運行版），尚未宣告為正式 production release。**
+
+現場執行打包的 `/opt/transplayer/releases/r9.AppDir/AppRun`，由 PM2 管理，
+不是從開發原始碼直接啟動，也不是單一 `.AppImage` 檔。
+使用者於 **2026-10-31（UTC）** 回報：
+
+- 已運行超過 **8 小時**，連線查看時播放正常。
+- **重開機後自動播放與畫面正常**。
+
+以上屬使用者人工確認，重開自啟不再列為未驗證；未提供精確起訖時間、
+全程資源／錯誤／重啟紀錄，因此不推論全程零錯誤、零重啟或永不出現 CAPTCHA。
+完整長時間監測、依賴弱點評估與剩餘驗收項目仍待完成；本次只更新文件，
+不重啟或變更現場部署。
 
 stage3 原子部署後，新舊 root 版本各 726 檔獨立校驗通過；舊 stage2
 保留於 `/opt/transplayer/releases/r9-stage2.AppDir`。完整 Linux 測試
@@ -26,9 +38,12 @@ stage3 原子部署後，新舊 root 版本各 726 檔獨立校驗通過；舊 s
 與捲動，129.1 秒確認持續捲動、原先接受的尺寸與舊除錯埠釋放。
 播放器 PID、PM2 重啟數均不變，使用者確認全畫面搜尋與影片疊加正常。
 **這是事件驅動回復，不是立即恢復**；原始 Chrome 退出原因仍未知，
-長時間 soak 與 stage3 下次實際登入未驗證。使用者已明確決定先整合至
-`master`、保全證據後移除工作樹並推送；這不代表長時間穩定性驗收通過。
+超過 8 小時運行及重開自啟已有上述人工確認，完整監測式 soak 仍未完成。
+來源已整合至 `master`、保全證據後移除工作樹並推送；
+來源整合本身不代表正式 production 驗收通過。
 完整證據見 `evidence/r9-stage3-real-browser-recovery.log`（runner exit 0）。
+歷史 `evidence/` 路徑下的工作樹證據已保全至主專案的
+`evidence/r9-handoff-20261030/`，未納入 Git。
 
 以下為 stage2 驗收、故障與暫時修復的歷史紀錄，不代表目前仍未部署：
 r9 固定安裝於 `/opt/transplayer/releases/r9.AppDir`，revision2 GNOME
@@ -69,7 +84,8 @@ r8 AppDir 與原始捷徑私有備份完整保留；r9 播放器目前由 PM2 �
 目前有一個線上 `transplayer`；登出時的舊 stopped 定義留在 PM2 dump，
 不等於本次線上程序。
 使用者層 `~/.config/autostart/Transplayer-PM2.desktop` 已安裝，
-人工觸發及真正登入均已觀察，但瀏覽器可靠性與連續 soak 未通過。
+人工觸發及真正登入均已觀察；stage3 重開自啟亦獲使用者確認，
+完整長時間資源／錯誤／重啟監測仍待補齊。
 Node／PM2 均非全域安裝。
 
 以下為歷史 r8 runtime 診斷（新機現行執行環境為 r9）：
@@ -219,18 +235,19 @@ Node 24.22.2／PM2 7.1.1 實機短測並安全停止。
 兩個桌面捷徑已切換為 `pm2-session.sh start|stop`，並實際有界起停；
 XDG autostart 已安裝，人工觸發與使用者真正重新登入均有觀察；
 原驗收檢查因錯誤的「無 PM2 dump」假設而失敗，須保留失敗紀錄。
-stage3 修正已上線並通過一次實機瀏覽器回復；代表性 soak 完成前，
-不要宣稱持續播放通過，也不要為了驗證而重啟正在播放的程序。
+stage3 修正已上線並通過一次實機瀏覽器回復；使用者已確認超過 8 小時
+運行、查看時播放正常，以及重開機自動播放正常。這不等同全程監測
+零錯誤或零重啟，也不要為了補驗證而重啟正在播放的程序。
 日常停止須用 `pm2-session.sh stop` 或現行 Stop 桌面捷徑，
 **不可只呼叫 `AppRun --stop`**，以免 PM2 重啟。若停止失敗，
 先停止 PM2 自動重啟，再只對核對身分的自有 PID 發出 TERM；
 KILL 為最後手段。完整條件與回復程序見
 [新機 runbook](tests/manual/ubuntu25-r8.md)。
 **不要** `pm2 save/resurrect` 或 root `pm2 startup`：登入時應以
-XDG autostart 從當次桌面授權建立單一程序，且仍須由使用者協調下次
-登入回報沒有鑰匙圈提示，唯讀檢查確認無
-`TRANSPLAYER_SMOKE_SECONDS`、單一播放器與 8080 監聽；然而
-後續瀏覽器故障與原驗收失敗仍阻止「可靠自動播放」結論。
+XDG autostart 從當次桌面授權建立單一程序。使用者已回報登入沒有
+鑰匙圈提示，並確認 stage3 重開後自動播放正常；後續維護仍須唯讀核對無
+`TRANSPLAYER_SMOKE_SECONDS`、單一播放器與 8080 監聽。
+人工確認不會把先前失敗的觀察腳本改判為通過；完整登入後診斷仍待補齊。
 
 遇錯保留日誌、正常停止本次自有程序，確認8080／子程序釋放及桌面還原。
 不要廣泛 `pkill Chrome`、刪 profile／影片或停 RustDesk。由當次私有備份回復
@@ -296,8 +313,9 @@ NopeCHA可能將挑戰內容送至第三方；證據不含cookie／token／密�
 ### Automatic login and keyring / 自動登入與鑰匙圈
 
 使用者確認展示機已設定自動登入；重開後桌面、RustDesk與雙直向配置通過，
-PM2 的登入後自啟項目已在使用者自行登入後觀察到單一線上播放器；
-後續全畫面瀏覽器故障使可靠播放驗收仍未完成。
+PM2 的登入後自啟項目已在使用者自行登入後觀察到單一線上播放器。
+stage3 已部署瀏覽器回復修正，使用者於 2026-10-31（UTC）
+確認重開機後自動播放與畫面正常；完整長時間監測仍未完成。
 使用者已核准r9 stage2的展示專用Chrome使用`--password-store=basic`，
 避免向系統登入鑰匙圈要求解鎖。**這個profile的密碼儲存不加密，
 禁止登入私人帳號或儲存密碼。** 不修改系統鑰匙圈、其他Chrome、
@@ -307,7 +325,7 @@ stage2已安裝並通過實際basic參數／圖片／刷新／捲動／關閉重
 已解鎖不能當成證明。模組只接受新空資料夾
 或帶本程式展示標記的profile，不會套用到既有非展示profile。
 原r9 stage1完整保留於`/opt/transplayer/releases/r9-stage1.AppDir`，
-目前固定r9.AppDir已原子切換為stage2，精確AppArmor策略未改。
+目前固定r9.AppDir已原子切換為stage3，stage2亦保留，精確AppArmor策略未改。
 官方依據：https://chromium.googlesource.com/chromium/src/+/main/docs/linux/password_storage.md
 
 ## Development and build / 開發、測試與建置
@@ -385,10 +403,15 @@ AppImage工具鎖在 [toolchain.json](packaging/toolchain.json)。輸出不可�
 音訊／穿透／接縫與正常停止。精確預設瀏覽器視窗幾何未通過，
 掉幀 10.44% 為已接受觀感但未消除的限制。受控異常斷線的
 租約回復與 PM2 重啟、實際桌面入口起停及人工觸發的 autostart
-項目均已通過；PM2 登入後確實啟動一個無時限播放器，但全畫面搜尋
-瀏覽器後來間歇消失、原登入檢查又因自動 dump 斷言失敗。
-修正版本尚未在實機部署及驗證，代表性連續 soak 也未完成；
-不可宣稱正式可靠交付。
+項目均已通過。早期全畫面搜尋瀏覽器間歇消失的回復修正已部署為
+stage3，並通過受控實機 Chrome 回復；原始退出原因仍未知。
+使用者於 2026-10-31（UTC）確認超過 8 小時運行、查看時播放正常，
+以及重開機後自動播放與畫面正常。
+
+仍待完成：完整長時間資源／錯誤／重啟監測、修正後完整登入診斷、
+extension 停用恢復實機驗證與依賴弱點評估。保留原登入檢查的自動 dump
+斷言失敗，不以人工確認回填成腳本通過；版本維持 RC／現場試運行定位，
+不宣稱所有正式 production 驗收項目已完成。
 
 - [目前Ubuntu25.10部署與回復](tests/manual/ubuntu25-r8.md)
 - [歷史Ubuntu18.04／X11完整指南](tests/manual/ubuntu18-installation.md)

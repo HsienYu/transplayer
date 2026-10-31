@@ -4,7 +4,46 @@ Approved scope: Ubuntu 25.10 x86_64, GNOME 49, Wayland, Ubuntu Dock 102.
 Preserve RustDesk, both desktop video files, and the old exhibition host.
 Do not restart the desktop, log out, reboot, disable sandboxing, or change
 system security policy without a separately coordinated decision.
-## Current r9 operation and promotion gate (2026-10-30)
+## Current r9 stage3 RC acceptance (recorded 2026-10-31T13:48:07Z UTC)
+
+Release status: **Release Candidate (RC) / field trial**, not a fully
+accepted production release. The installed package is the root-owned
+`/opt/transplayer/releases/r9.AppDir`, started through `AppRun` by the
+existing private PM2 supervisor; it is not a development-source launch
+or a single-file AppImage.
+
+The user reported the following for the current installation:
+
+- More than eight hours of operation; playback looked normal when the
+  user connected to inspect the exhibition machine.
+- Automatic playback and the displayed result were correct after reboot.
+
+Record both as **user-confirmed manual results**. Reboot autoplay is no
+longer unverified. Exact run start/end and reboot times were not supplied;
+the heading records documentation time, not the event times. No complete
+resource/error/restart history was collected for this interval, so do not
+infer uninterrupted process uptime, zero errors/restarts or permanent
+CAPTCHA immunity. The earlier controlled player restart and stage3 Chrome
+recovery results remain valid, separate evidence.
+
+Outstanding work: continuously instrumented long-duration monitoring,
+corrected complete post-login diagnostics, live extension-disable recovery,
+dependency-vulnerability assessment, and investigation of the original
+Chrome exit cause. Preserve accepted geometry/frame-drop limitations.
+Do not interrupt playback to update documentation or repeat an already
+user-confirmed reboot. New maintenance still requires its own approval.
+
+Source integration and worktree cleanup are complete. Historical worktree
+`evidence/` paths below now refer to files preserved in the main checkout's
+ignored `evidence/r9-handoff-20261030/`. Retain all earlier failures;
+the user reports do not retroactively turn a failed observer into a pass.
+
+## Historical r9 operation and promotion gate (2026-10-30)
+
+The following records the earlier deployment sequence and its gates.
+Statements such as "not yet installed" or "pending" describe that stage,
+not the current acceptance status above. Do not rerun these steps merely
+because their original prerequisites remain written here.
 
 The fixed, root-owned `/opt/transplayer/releases/r9.AppDir/AppRun` is the
 current installation. Both desktop entries now invoke the versioned r9
@@ -326,8 +365,10 @@ The user confirmed fullscreen search and video overlay looked normal.
 This proves one recovery at a subsequent scheduled search event,
 **not immediate recovery**, long-term reliability or the original
 Chrome-exit cause. Stage3 remains running under the existing PM2
-supervisor. Representative soak and complete post-login checks remain
-pending. The user subsequently explicitly authorized merging into the
+supervisor. At that point, representative soak and complete post-login
+checks were pending; later manual results and remaining diagnostic limits
+are recorded in the current RC acceptance section above.
+The user subsequently explicitly authorized merging into the
 existing `master`, removing the isolated worktree after full evidence
 preservation, and pushing to origin before the proposed eight-hour soak.
 This changes the source-integration gate only, not the recorded test
@@ -1009,7 +1050,8 @@ the known r8 targets. Keep all numbered evidence under the ignored
 This section records the preparation order. Current witnessed checks and
 the no-resurrection login procedure are in the r9 section above. The user
 subsequently witnessed audio, click-through and seam in a bounded PM2 run.
-Next-login autostart and continuous soak remain unverified.
+At this preparation stage, next-login autostart and continuous soak were
+unverified; see the current RC acceptance section for later user reports.
 
 Use the existing verified Node 24.22.2 from the private stage, copying it
 to a permanent user-owned versioned tool directory before any stage

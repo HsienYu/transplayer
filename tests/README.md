@@ -69,8 +69,17 @@ accepted geometry, released old debugger and unchanged player PID/PM2
 restart count passed at 129.1 seconds. The user confirmed the recovered
 fullscreen search/video overlay. Full observations are retained in
 `evidence/r9-stage3-real-browser-recovery.log`; runner exit 0.
-This is event-driven, not immediate recovery; representative soak,
-stage3 next-login checks and the original exit cause remain unresolved.
+This is event-driven, not immediate recovery; the original exit cause
+remains unresolved. On 2026-10-31 (UTC), the user confirmed more than
+eight hours of operation with normal playback at inspection, and correct
+automatic playback after reboot. These are user-reported manual results,
+not a continuously instrumented soak or a corrected post-login diagnostic
+pass. Complete resource/error/restart records remain unavailable.
+The release remains r9 stage3 RC / field trial, not a fully accepted
+production release. See the current acceptance section in
+`manual/ubuntu25-r8.md`. Historical worktree `evidence/` files referenced
+here are preserved under `evidence/r9-handoff-20261030/` in the main
+checkout and are not committed.
 A preceding user-approved reversible
 lock move aborted at its activity gate without changing the host:
 `evidence/r9-stale-lock-reversible-recovery-20261031.log`.
