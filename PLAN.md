@@ -140,3 +140,17 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   (c) slow the search cadence / fewer scenes to reduce challenge frequency; (d) route the
   choreography through Google's official Programmable Search API (ToS-clean, no captcha, but
   changes the on-screen aesthetic and has quota/cost). No code changed this round (read-only).
+
+### 2026-11-04 09:3x CET -- Claude Opus 4.8 (studio) -- host retired / powered off
+- The exhibition side is replacing this 2-core Celeron host with a more powerful machine, so
+  the user asked to shut it down ("先關機吧 ... 展覽方要換成另一台效能比較好的電腦"). Powered
+  it off over SSH (`sudo -S systemctl poweroff`, user-authorized hcw password); ping + SSH both
+  confirm offline. The box is retired; `100.84.243.117` will no longer respond.
+- Nothing lost: all work is on branch `fix/r10-linux-optional-dependencies` (tip 6709c79) and
+  on origin. For the NEW machine deploy: (1) RE-MEASURE dropped frames first -- a stronger CPU
+  may remove the need for the opaque-repack + WebGL recomposite path (that whole effort was
+  driven by the 2-core software-decode bottleneck); (2) the reCAPTCHA issue is Google-side and
+  is NOT fixed by faster hardware -- carry the decision forward (human-solve-once / slower
+  cadence / Programmable Search API / paid nopecha); (3) redo display portrait rotation +
+  persistence on the new machine; (4) install nvidia-vaapi-driver there if the packed-alpha HW
+  decode path is still wanted. Memory updated: shared/transplayer-formal-host.md marked RETIRED.
