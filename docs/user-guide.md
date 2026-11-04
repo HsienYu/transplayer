@@ -31,7 +31,7 @@
 技術備援命令（只適用已取得並驗證過的實際候選套件）：
 
 ```sh
-sudo apt install ./transplayer_1.1.0~rc1_amd64.deb
+sudo apt install ./transplayer_1.1.0~rc2_amd64.deb
 ```
 
 安裝時不會以 root 啟動播放器，也不會自動登入、登出、重開機、旋轉螢幕或關閉系統安全措施。

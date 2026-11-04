@@ -84,8 +84,11 @@ Esc／關閉任一視窗會一起清理，120 秒後自動關閉。
 測試結束只回報已關閉，不把人工方向／左右確認寫成自動驗收成功。
 
 chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`，
-不使用 `--restore-last-session`、不偽造正常退出、不重寫 Preferences，
+不使用 `--restore-last-session`、不偽造正常退出，
 也不刪除專用 profile、session 檔或 SingletonLock。
+GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併
+Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求；不修改退出狀態、
+私人 profile 或憑證／Safe Browsing 設定。實際瀏覽器 UI 仍須另驗。
 Chrome156 的官方 [HasPendingUncleanExit](https://github.com/chromium/chromium/blob/156.0.8078.80/chrome/browser/ui/startup/startup_browser_creator.cc#L1598)
 確認此旗標的判斷路徑；單元測試只證明啟動參數及重建路徑，不證明瀏覽器 UI。
 發行時須以本版原始碼重建 portable 輸入，不能把舊 bundle 改名當成修正版。

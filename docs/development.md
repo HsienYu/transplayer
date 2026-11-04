@@ -16,7 +16,15 @@ Ubuntu 26.04 r10 是**待實機驗證的 RC 原始碼**，不是已發布 `.deb`
   GTK3 延遲載入。顯示器探針在獨立子程序的主執行緒初始化 GDK，
   設定視窗不在背景執行緒操作 GTK。
 - `packaging/installer/release.json`：r10 路徑、版本、桌面 revision 及 supervisor 版本契約。
-  Debian 版本 `1.1.0~rc1` 不會自動改寫作品原本 `package.json` 的歷史應用版本。
+  Debian 版本 `1.1.0~rc2` 不會自動改寫作品原本 `package.json` 的歷史應用版本。
+
+GPU 候選版保留 Electron 預設加速，不再由 `main.js` 全域停用；
+未強制影片硬解、忽略 GPU blocklist 或停用 GPU sandbox。
+正式機獨立 A/B 掉格率 11.56%→1.62%，兩輪仍為 Vpx 軟體解碼。
+操作者已確認該探針的透明、無黑底／閃爍與穿透；完整作品、音訊、
+瀏覽器 UI、生命週期及 soak 仍須以新版安裝後驗證。
+專用 Chrome profile 同時關閉翻譯／儲存密碼等提示與預設權限詢問；
+不修改私人 profile、不略過憑證或 Safe Browsing。
 
 ## Tests / 開發與測試
 
@@ -90,6 +98,10 @@ python3 packaging/prepare-supervisor.py \
 可信來源依賴乾淨 `npm ci` 的 integrity 檢查與建置環境保全；
 自行對不可信目錄產生 SHA256SUMS 不會讓它成為可信輸入。
 PM2、其相依原始碼／授權檔、Node LICENSE 會隨工具組保留。
+Linux 的 `npm ci` 會省略例如僅限 macOS 的 optional `fsevents`。
+工具準備以固定 Linux/x64 輸出目標解讀鎖檔的 `os`／`cpu`：
+只允許缺少明確排除此目標的 optional 套件；必要或適用套件缺項、
+已有套件版本不符與 symlink 仍會拒絕，不改鎖檔或跳過全部 optional。
 
 ## Stage and package / 組裝套件
 
@@ -111,7 +123,7 @@ python3 packaging/build-deb.py \
 環境變數為發行人員事先取得的 provenance 值，不是秘密或應用程式 runtime 設定。
 此命令只產生 **staging tree，不是可安裝套件**。
 在 Ubuntu 26.04 amd64 建置機上，使用全新的 stage 路徑，
-同一命令加上 `--build /absolute/path/transplayer_1.1.0~rc1_amd64.deb`，
+同一命令加上 `--build /absolute/path/transplayer_1.1.0~rc2_amd64.deb`，
 才會呼叫 `dpkg-deb --root-owner-group --build` 並輸出 SHA-256 sidecar。
 本階段尚未執行真正 Linux 建置。
 

@@ -56,6 +56,11 @@ one wrapper running **48 Python tests (OK)**. Complete output:
 `evidence/r10-display-lifecycle-green.log`.
 `chrome-session.test.js` adds initial/replacement launch checks for
 `--hide-crash-restore-bubble` without restoring old tabs.
+It also checks `--disable-infobars` on both launches without adding
+certificate, web-security or full/GPU-sandbox bypass switches. Chromium156
+supports this switch in Chrome for Testing for buttonless information bars;
+it does not dismiss interactive confirmations. Red output is retained in
+`evidence/r10-infobars-red.log`. Real browser UI acceptance remains required.
 `installer_cases.py` adds direction-only pattern planning from logical
 geometry, independent rotation metadata, reversed enumeration/negative
 origins, malformed/mirrored/gapped/offset layout rejection, fixed settings
@@ -74,6 +79,114 @@ remain **NOT EXECUTED** under the Ubuntu26 manual protocol.
 
 See [development](../docs/development.md) and [operations](../docs/operations.md)
 for build provenance, release blockers and maintenance boundaries.
+### Linux supervisor input preparation
+
+`installer_cases.py` reproduces Linux npm's omission of darwin-only optional
+`fsevents`. Synthetic fixtures exercise positive/negative OS and CPU constraints
+for the fixed Linux/x64 output target. Missing required or applicable optional
+packages, malformed metadata, present version mismatches and symlink inputs
+remain rejected. Four new Python tests are subtests within the existing Node
+wrapper, not four additional Node tests. These fixtures do not execute PM2.
+
+## Dedicated browser dialog preferences
+
+`chrome-session.test.js` exercises real private temporary profiles as well
+as injected browser/driver boundaries. It checks translation/password-save/
+auto-sign-in/passkey-upgrade/autofill offers off, default notification/location/
+camera/microphone settings blocked, unrelated settings and site exceptions
+preserved, byte-idempotent reopening, corrupt/nonobject/nested JSON refusal,
+directory/file symlinks, hardlinks, unsafe permissions and live-lock refusal.
+Initial and replacement starts must prepare on-disk preferences before spawn.
+The actual attachment capability builder is checked for prompt `dismiss`,
+not `accept`; this takes effect when WebDriver encounters the prompt, not
+as a universal website-dialog blocker.
+
+The current portable run passed **110 Node tests, 0 failures, 0 skipped**;
+the Chrome suite passed **29 tests**, and the shutdown wrapper runs seven
+Python cases. Full output: `evidence/r10-dialog-preferences-full-final.log`
+and `evidence/r10-dialog-preferences-green-final.log`. Red output, including
+the initial fixture setup failure and corrected behavioral red, is retained
+in `evidence/r10-dialog-preferences-red.log` and `-red-v2.log`.
+These tests do not launch real Chrome or prove browser UI acceptance.
+
+## GPU diagnostic shutdown settling
+
+`gpu-probe.test.js` runs `gpu_probe_cases.py` with stubbed installer imports;
+no player, Linux desktop, browser, network or signal is used. Seven Python
+settling cases cover immediate idle, delayed process exit with retained identities,
+listener/lease/panel release, persistent activity, inspection errors,
+invalid limits and late observations. The real inspector bounds its desktop
+subprocess by the remaining deadline. These tests do not establish real GPU
+performance. Complete red/green output is retained under ignored `evidence/`
+as `r10-gpu-settle-*.log`.
+Eight additional inspection cases (15 Python tests total) exercise explicit
+CLI opt-in, fixed numeric-PID sudo/readlink argv with no shell or password
+input, no elevation for readable processes, failed/expired authorization,
+timeouts, invalid budgets, hostile PID/output and changed process identity.
+All sudo/process calls are mocked; no real privileged command is run.
+Red/green/full output is retained in `evidence/r10-gpu-inspection-*.log`;
+full portable suite remains110 Node tests,0fail/0skipped (one wrapper).
+`experiments/gpu-playback/operator.sh` is syntax-checked separately; its actual
+sudo credential cache, GNOME effects and restoration require the live protocol.
+
+### GPU probe phase diagnostics
+
+Six additional VM cases in `gpu-probe.test.js` execute the actual diagnostic
+main/renderer scripts with synthetic Electron/video boundaries. They cover
+metadata and seek stalls, play rejection, successful measurement ordering,
+the unchanged55-second watchdog retaining its last phase, and allowlisted
+console relay rejecting arbitrary stage text/URL fields. No real media,
+Electron window or GPU is used. `progress.jsonl` is created exclusively0600;
+phase logging does not change seek/play order or extend timeouts.
+Electron's Event-property `console-message` API is supported since35, including
+the pinned45; reference: official `docs/api/web-contents.md` and
+`docs/breaking-changes.md`, consulted through Context7 on2026-11-04 UTC.
+
+Behavioral red output (six failures), focused green (7pass/0fail/0skipped)
+and full suite (116pass/0fail/0skipped) are preserved in
+`evidence/r10-gpu-progress-{red,green,full}.log`.
+The15 Python cases remain one Node wrapper, not15 extra Node tests.
+At the021802Z staging handoff, phase diagnostics were SHA/syntax-verified
+but not yet live-run; the subsequent live failure and correction are below.
+The full116-test output from that handoff is
+retained in main-checkout `release-builds/r10-gpu-ab-20261104T021802Z/full-tests.log`.
+See the latest manual evidence before any retry.
+
+### GPU debugger navigation dependency
+
+The021802Z live phase trace stopped at Media.enable before page navigation.
+The fixture now models a debugger reply that stays pending until navigation,
+instead of resolving every mocked command immediately. Three new cases cover
+navigation→attach→Media.enable→renderer ordering, navigation failure with no
+debugger commands, and Media.enable failure with no renderer invocation.
+The probe now loads its local page first; the video still has no src until
+runProbe, so media instrumentation is enabled before playback starts.
+Fixed-version official reference:
+https://raw.githubusercontent.com/electron/electron/v45.1.0/docs/api/debugger.md
+and upstream https://github.com/electron/electron/issues/14810 ,
+consulted through Exa on2026-11-04 UTC.
+
+Complete red (3 failures), focused green (10pass/0fail/0skipped) and full
+(119pass/0fail/0skipped) outputs:
+`evidence/r10-gpu-navigation-{red,green,full}.log`.
+The subsequent023354Z live comparison completed both rounds and restoration;
+see the manual evidence for measurements and limitations. Unit tests and
+the earlier failed probes do not establish GPU performance.
+
+## Production GPU startup
+
+`main.test.js` executes the actual production entrypoint in a VM with
+synthetic Electron, process and child boundaries, plus real canvas geometry.
+Seven cases cover default GPU policy without bypass flags, transparent
+click-through placement and renderer isolation, hostile navigation/foreign
+status rejection, wrong-display refusal before forking, cooperative/idempotent
+stop, stop-only startup and duplicate-instance refusal.
+The GPU-policy case failed before removing the global acceleration disable;
+the six invariant cases already passed and remain regression guards.
+These are not real Electron/GNOME, audio or performance tests.
+Complete red/green/full output:
+`evidence/r10-main-gpu-{red,green,full}.log`.
+The full run passed126 tests,0fail/0skipped.
 
 ## Historical r9 and earlier verification
 
