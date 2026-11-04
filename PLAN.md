@@ -95,3 +95,14 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   the full packed master; verify playback visually + `nvidia-smi dmon` decoder > 0.
 - Open questions: is the recomposited output visually identical to the artist; h264 vs vp9
   for the packed master (NVDEC both ok; decode-cost A/B not run).
+
+### 2026-11-04 09:00 CET -- Claude Opus 4.8 (studio)
+- State: User said the source `stonesandelephants.webm` is already on the formal host's
+  desktop (`/home/hcw/Desktop/`), so the studio transfer is unnecessary. Stopped the
+  background rsync and removed the partial file from `~/.cache/transplayer-transfer/`.
+- Decision: Do NOT pre-build the full packed master on studio. When it is needed, run
+  `make-alpha-pack.sh` against the on-host source. Caveat: doing that on the 2-core host
+  competes with the live player, so run it while the player is stopped (e.g. during the
+  maintenance/activation window), not during the live test.
+- Next steps: unchanged from the entries above (artist accepts the demo -> enable-hw-decode.sh
+  -> build the packed master on host during a quiet window -> wire the packed-alpha path).
