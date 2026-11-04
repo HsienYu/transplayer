@@ -1,0 +1,72 @@
+# Plan: transplayer r10 Ubuntu 26 exhibition deployment (formal host hcw)
+
+Workflow: Hybrid (Section 7, hardware/real-time video) + Deployment (Section 14) +
+Production change (Section 24). The performance fix is gated on the artist's visual
+acceptance because every real option alters the artwork's video pipeline.
+
+Formal host: `hcw@100.84.243.117` (Tailscale) — Ubuntu 26.04.1 LTS, GNOME 50.1,
+Celeron G3930 (2 cores), 15 GiB RAM, RTX 4060 / NVIDIA 595.99.02. Two ASUS VP247
+1920x1080 panels (DP-2 serial G9L..., HDMI-1 serial H3L...).
+
+Branch: `fix/r10-linux-optional-dependencies` (pushed to origin). Master stays clean
+at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
+
+## Status
+
+- [done] Diagnose the dropped-frames root cause with primary evidence (VP9 + `alpha_mode=1`;
+  Chromium 156 refuses HW decode for alpha unless HEVC; libvpx software decode on a 2-core
+  Celeron). See [docs/performance.md](docs/performance.md).
+- [done] Commit the accumulated r10 work on the branch (installer optional-dep fix; rc2 GPU
+  compositing + Chrome profile hardening; GPU A/B spike; docs/runbook). Suites run green on
+  2026-11-04: Node 126/0/0, Python installer 52 OK, Python gpu_probe 15 OK.
+- [done] Push the branch to origin (`fix/r10-linux-optional-dependencies` = ecf8b1c).
+- [done] Enable login autostart on the formal host via `transplayer configure --autostart`
+  (owned entry `~/.config/autostart/transplayer-r10.desktop`, Exec `transplayer login`).
+- [todo] Make autostart actually render on boot. BLOCKED: the two displays are currently
+  LANDSCAPE (1920x1080); the prior temporary portrait rotation was lost on a session reset.
+  `transplayer login` runs `check_displays`, which requires two 1080x1920 PORTRAIT panels,
+  so it will refuse to play until rotation is set AND persisted (monitors.xml). A one-shot
+  persist script is staged on the host (see Handoff Log). Applying it rotates the live
+  screens and the physical up/left-right cannot be verified remotely, so it is left for the
+  operator/user to run with the `transplayer screens` visual check, then reboot to verify.
+- [todo] Performance fix for dropped frames. Gated on the artist's decision + visual
+  acceptance: opaque-repack+shader, HEVC+alpha, lighter browser choreography, or a stronger
+  playback machine. See [docs/performance.md](docs/performance.md). rc2 (GPU compositing)
+  is already the best deployed state; not changed this round.
+- [todo] Physical display orientation acceptance (upright, left/right vs physical mount) —
+  needs on-site eyes via `transplayer screens`.
+- [todo] Reboot + autoplay acceptance (after rotation persisted) — not done tonight to avoid
+  interrupting the live test session while the user rests; left as the user's gated step.
+- [todo] Remaining release gates before any stable promotion / Git master merge / tag: full
+  playback/audio/UI/performance acceptance, lifecycle/boot/rollback verification, soak test,
+  lintian, dependency-vulnerability remediation (GitHub dependabot shows alerts on master),
+  license/distribution approval.
+
+## Notes / safety
+
+- The `hcw` sudo password was shared in chat. It was NOT used — studio already had SSH key
+  access to the host. Recommend changing it since it now exists in a transcript. The password
+  is not written to any file, commit, doc, or memory.
+- No stable release, tag, or master merge was made; `同步到git` was satisfied by pushing the
+  feature branch. Whether to merge to master is the user's call (see morning report).
+
+## Handoff Log
+
+### 2026-11-04 06:14 CET (05:14Z) -- Claude Opus 4.8 (studio, operating hcw over Tailscale key)
+- State: Branch committed + pushed (ecf8b1c). Autostart enabled on hcw. Diagnosis and
+  performance memo written. Displays currently landscape; rotation persistence and reboot
+  deliberately NOT applied overnight (would rotate the live test session and the physical
+  orientation is unverifiable remotely). Mac isolated worktree `transplayer-r10-linux-build`
+  removed after the branch was confirmed on origin (its 248K local-only `evidence/` was
+  preserved first — see below).
+- Decisions: Did not transcode the artwork or change the player's performance settings; every
+  real fix alters the artwork and needs the artist's visual acceptance. rc2 (GPU compositing)
+  left as the best deployed state. Pushed the branch only; no stable promotion (gates unmet).
+- Next steps: (1) operator sets both panels to 1080x1920 portrait and confirms up/left-right
+  with `transplayer screens`, OR runs the staged one-shot persist script on the host
+  (`~/.cache/transplayer-builds/r10-display-persist-*/persist-portrait.sh`), which was
+  method-0 (verify, dry-run) checked tonight; (2) reboot and verify boot_id change, portrait
+  persisted, PM2 player online, 8080 listening, playback advancing; (3) decide the performance
+  direction in docs/performance.md.
+- Open questions: performance direction (artist decision); physical orientation (needs eyes);
+  whether to merge the branch to master.
