@@ -46,6 +46,90 @@ function inspectEndpoint(child, port, io = fs) {
     throw new Error("Debugger listener is not owned by the spawned Chrome");
   return true;
 }
+function preparePreferences(directory) {
+  const defaults = path.join(directory, "Default");
+  try { fs.mkdirSync(defaults, { mode: 0o700 }); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+  const parent = fs.lstatSync(defaults);
+  if (!parent.isDirectory() || parent.isSymbolicLink() ||
+      parent.uid !== process.getuid() || (parent.mode & 0o077))
+    throw new Error("Unsafe Chrome preferences directory");
+  const preferences = path.join(defaults, "Preferences");
+  let original = null, text = null;
+  let fd;
+  try {
+    fd = fs.openSync(preferences, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW |
+      fs.constants.O_NONBLOCK);
+    original = fs.fstatSync(fd);
+    if (!original.isFile() || original.uid !== process.getuid() ||
+        original.nlink !== 1 || (original.mode & 0o077) || original.size > 8 * 1024 * 1024)
+      throw new Error("Unsafe Chrome preferences file");
+    text = fs.readFileSync(fd, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      if (error.code === "ELOOP") throw new Error("Unsafe Chrome preferences symlink");
+      throw error;
+    }
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+  let value;
+  try { value = text === null ? {} : JSON.parse(text); }
+  catch (_) { throw new Error("Invalid Chrome preferences JSON"); }
+  const object = node => node !== null && typeof node === "object" && !Array.isArray(node);
+  if (!object(value)) throw new Error("Chrome preferences must be an object");
+  // Chromium156 pref names: translate_pref_names.h, password_manager_pref_names.h,
+  // autofill_prefs.h. This is the manually spawned browser's on-disk profile.
+  const settings = [
+    ["translate.enabled", false],
+    ["credentials_enable_service", false],
+    ["credentials_enable_autosignin", false],
+    ["credentials_enable_automatic_passkey_upgrades", false],
+    ["autofill.profile_enabled", false],
+    ["autofill.credit_card_enabled", false],
+    ...["notifications", "geolocation", "media_stream_camera", "media_stream_mic"]
+      .map(key => ["profile.default_content_setting_values." + key, 2]),
+  ];
+  for (const [key, setting] of settings) {
+    const parts = key.split(".");
+    let node = value;
+    for (const part of parts.slice(0, -1)) {
+      if (!Object.prototype.hasOwnProperty.call(node, part)) node[part] = {};
+      if (!object(node[part])) throw new Error("Chrome preference nodes must be objects");
+      node = node[part];
+    }
+    node[parts[parts.length - 1]] = setting;
+  }
+  const output = JSON.stringify(value) + "\n";
+  if (output === text) return;
+  const temporary = path.join(defaults, ".transplayer-prefs-" +
+    require("crypto").randomBytes(12).toString("hex"));
+  let created = false;
+  try {
+    fd = fs.openSync(temporary, "wx", 0o600);
+    created = true;
+    try {
+      fs.writeFileSync(fd, output);
+      fs.fsyncSync(fd);
+    } finally { fs.closeSync(fd); }
+    const currentParent = fs.lstatSync(defaults);
+    if (currentParent.dev !== parent.dev || currentParent.ino !== parent.ino)
+      throw new Error("Chrome preferences directory changed during preparation");
+    if (original) {
+      const current = fs.lstatSync(preferences);
+      if (current.dev !== original.dev || current.ino !== original.ino ||
+          current.nlink !== 1 || current.size !== original.size ||
+          current.mtimeMs !== original.mtimeMs)
+        throw new Error("Chrome preferences changed during preparation");
+    } else if (fs.existsSync(preferences)) {
+      throw new Error("Chrome preferences appeared during preparation");
+    }
+    fs.renameSync(temporary, preferences);
+    created = false;
+  } finally {
+    if (created) fs.unlinkSync(temporary);
+  }
+}
 function prepareProfile(directory) {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const info = fs.lstatSync(directory);
@@ -70,7 +154,7 @@ function prepareProfile(directory) {
   let lock;
   try { lock = fs.lstatSync(lockPath); }
   catch (error) {
-    if (error.code === "ENOENT") return;
+    if (error.code === "ENOENT") return preparePreferences(directory);
     throw error;
   }
   const locked = () => new Error("Chrome profile already locked; preserve it for operator review");
@@ -85,7 +169,7 @@ function prepareProfile(directory) {
   try { process.kill(pid, 0); }
   catch (error) {
     // Chrome handles its own stale lock; never remove profile lock files here.
-    if (error.code === "ESRCH") return;
+    if (error.code === "ESRCH") return preparePreferences(directory);
     throw locked();
   }
   throw locked();
@@ -169,7 +253,8 @@ class ChromeSession {
       connect: (server, address) => {
         const { Builder } = require("selenium-webdriver");
         return new Builder().usingServer(server).withCapabilities({
-          browserName: "chrome", "goog:chromeOptions": { debuggerAddress: address },
+          browserName: "chrome", unhandledPromptBehavior: "dismiss",
+          "goog:chromeOptions": { debuggerAddress: address },
         }).build();
       },
       ...dependencies,
@@ -203,7 +288,7 @@ class ChromeSession {
       this.child = this.deps.spawn(this.options.chromePath, [
         "--ozone-platform=x11", "--disable-setuid-sandbox",
         "--no-first-run", "--no-default-browser-check", "--password-store=basic",
-        "--hide-crash-restore-bubble",
+        "--hide-crash-restore-bubble", "--disable-infobars",
         "--user-data-dir=" + this.options.profileDir,
         "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=" + this.port,
         "--new-window", "about:blank",

@@ -12,7 +12,6 @@ let stopping = false;
 app.setName("Transplayer");
 app.setPath("userData", path.join(app.getPath("appData"), "transplayer-portable"));
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
-app.disableHardwareAcceleration();
 
 async function stop(code = 0) {
   if (stopping) return;

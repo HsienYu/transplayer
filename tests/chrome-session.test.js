@@ -83,6 +83,30 @@ test("replacement Chrome suppresses restore UI while reusing the dedicated profi
   }
 });
 
+
+for (const replacement of [false, true]) {
+  test(`${replacement ? "replacement" : "initial"} Chrome suppresses noninteractive infobars without bypassing site security`, async () => {
+    if (replacement) {
+      const previous = fixture();
+      const old = new (load().ChromeSession)(previous.options, previous.deps);
+      await old.start();
+      previous.child.signalCode = "SIGKILL";
+      await old.close();
+    }
+    const f = fixture(), session = new (load().ChromeSession)(f.options, f.deps);
+    try {
+      await session.start();
+      const args = f.calls.find(c => c[0] === "spawn")[2];
+      assert.equal(args.filter(a => a === "--disable-infobars").length, 1);
+      for (const forbidden of ["--ignore-certificate-errors", "--disable-web-security",
+        "--no-sandbox", "--disable-gpu-sandbox", "--safebrowsing-disable-auto-update"])
+        assert(!args.some(a => a.startsWith(forbidden)), forbidden);
+    } finally {
+      await session.close();
+    }
+  });
+}
+
 test("basic storage refuses an existing unclaimed browser profile", () => {
   const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
   const { ChromeSession } = load();
@@ -146,6 +170,151 @@ test("live, foreign and malformed Chrome locks are never adopted", () => {
     fs.rmSync(root, { recursive: true });
   }
 });
+function profileCase(run) {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "transplayer-dialogs-"));
+  const profile = path.join(root, "exhibition");
+  const prepare = new (load().ChromeSession)({}).deps.prepareProfile;
+  try {
+    prepare(profile);
+    const defaults = path.join(profile, "Default");
+    const preferences = path.join(defaults, "Preferences");
+    if (!fs.existsSync(defaults)) fs.mkdirSync(defaults, { mode: 0o700 });
+    if (!fs.existsSync(preferences)) fs.writeFileSync(preferences, "{}", { mode: 0o600 });
+    run({ fs, path, root, profile, prepare,
+      defaults: path.join(profile, "Default"),
+      preferences: path.join(profile, "Default", "Preferences") });
+  } finally {
+    fs.rmSync(root, { recursive: true });
+  }
+}
+
+test("fresh dedicated profile disables offers and denies unsolicited permissions", () => {
+  profileCase(({ fs, defaults, preferences }) => {
+    const value = JSON.parse(fs.readFileSync(preferences, "utf8"));
+    assert.equal(value.translate.enabled, false);
+    for (const key of ["credentials_enable_service", "credentials_enable_autosignin",
+      "credentials_enable_automatic_passkey_upgrades"]) assert.equal(value[key], false, key);
+    assert.equal(value.autofill.profile_enabled, false);
+    assert.equal(value.autofill.credit_card_enabled, false);
+    for (const key of ["notifications", "geolocation", "media_stream_camera", "media_stream_mic"])
+      assert.equal(value.profile.default_content_setting_values[key], 2, key);
+    assert.equal(fs.statSync(defaults).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(preferences).mode & 0o777, 0o600);
+  });
+});
+
+test("reopening merges only exhibition preferences and is byte-idempotent", () => {
+  profileCase(({ fs, preferences, prepare, profile }) => {
+    const value = { translate: { enabled: true, retained: ["en"] },
+      autofill: { retained: true }, profile: {
+        default_content_setting_values: { notifications: 1, javascript: 1 },
+        content_settings: { exceptions: { notifications: { "https://synthetic.invalid,*": { setting: 1 } } } } },
+      safebrowsing: { enabled: true }, custom: { text: "測試設定" } };
+    fs.writeFileSync(preferences, JSON.stringify(value), { mode: 0o600 });
+    prepare(profile);
+    const merged = JSON.parse(fs.readFileSync(preferences, "utf8"));
+    assert.equal(merged.translate.enabled, false);
+    assert.deepEqual(merged.translate.retained, ["en"]);
+    assert.deepEqual(merged.profile.content_settings, value.profile.content_settings);
+    assert.equal(merged.profile.default_content_setting_values.javascript, 1);
+    assert.deepEqual(merged.safebrowsing, value.safebrowsing);
+    assert.deepEqual(merged.custom, value.custom);
+    const before = fs.readFileSync(preferences);
+    prepare(profile);
+    assert.deepEqual(fs.readFileSync(preferences), before);
+  });
+});
+
+test("malformed JSON and unsafe nested preference nodes are refused without mutation", () => {
+  for (const text of ["{", "null", "[]", "42", '{"translate":[]}',
+    '{"profile":null}', '{"profile":{"default_content_setting_values":"unsafe"}}']) {
+    profileCase(({ fs, preferences, prepare, profile }) => {
+      fs.writeFileSync(preferences, text, { mode: 0o600 });
+      assert.throws(() => prepare(profile), /preference|object|JSON/i);
+      assert.equal(fs.readFileSync(preferences, "utf8"), text);
+    });
+  }
+});
+
+test("symlinked, hardlinked and permissive preference paths are refused", () => {
+  for (const kind of ["directory-link", "file-link", "hardlink", "directory-mode", "file-mode"]) {
+    profileCase(({ fs, path, root, defaults, preferences, prepare, profile }) => {
+      const outside = path.join(root, "outside");
+      fs.writeFileSync(outside, '{"unrelated":true}', { mode: 0o600 });
+      if (kind === "directory-link") {
+        const target = path.join(root, "other-default");
+        fs.mkdirSync(target, { mode: 0o700 });
+        fs.renameSync(defaults, path.join(root, "saved-default"));
+        fs.symlinkSync(target, defaults);
+      } else if (kind === "file-link" || kind === "hardlink") {
+        fs.renameSync(preferences, path.join(root, "saved-preferences"));
+        if (kind === "file-link") fs.symlinkSync(outside, preferences);
+        else fs.linkSync(outside, preferences);
+      } else {
+        fs.chmodSync(kind === "file-mode" ? preferences : defaults, 0o777);
+      }
+      assert.throws(() => prepare(profile), /unsafe|preference/i, kind);
+      assert.equal(fs.readFileSync(outside, "utf8"), '{"unrelated":true}');
+    });
+  }
+});
+
+test("live profile lock refuses preference changes before touching bytes", () => {
+  profileCase(({ fs, path, preferences, prepare, profile }) => {
+    const text = '{"translate":{"enabled":true}}';
+    fs.writeFileSync(preferences, text, { mode: 0o600 });
+    fs.symlinkSync(`${require("node:os").hostname()}-${process.pid}`,
+      path.join(profile, "SingletonLock"));
+    assert.throws(() => prepare(profile), /locked/i);
+    assert.equal(fs.readFileSync(preferences, "utf8"), text);
+  });
+});
+
+test("real attachment capabilities dismiss rather than accept unexpected JavaScript prompts", async () => {
+  let captured;
+  class Builder {
+    usingServer() { return this; }
+    withCapabilities(value) { captured = value; return this; }
+    build() { return Promise.resolve({}); }
+  }
+  const sandbox = { module: { exports: {} }, process, setTimeout, clearTimeout,
+    require: name => name === "selenium-webdriver" ? { Builder } : require(name) };
+  require("node:vm").runInNewContext(
+    require("node:fs").readFileSync(require.resolve("../chrome-session"), "utf8"), sandbox);
+  const session = new sandbox.module.exports.ChromeSession({});
+  await session.deps.connect("http://127.0.0.1:4444", "127.0.0.1:23456");
+  assert.equal(captured.unhandledPromptBehavior, "dismiss");
+  assert.equal(captured["goog:chromeOptions"].debuggerAddress, "127.0.0.1:23456");
+});
+
+test("initial and replacement starts prepare real dedicated preferences before spawning", async () => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "transplayer-dialog-launch-"));
+  const profile = path.join(root, "exhibition");
+  const preferences = path.join(profile, "Default", "Preferences");
+  try {
+    for (const replacement of [false, true]) {
+      if (replacement)
+        fs.writeFileSync(preferences, '{"translate":{"enabled":true}}', { mode: 0o600 });
+      const f = fixture();
+      f.options.profileDir = profile;
+      f.deps.prepareProfile = new (load().ChromeSession)({}).deps.prepareProfile;
+      const spawn = f.deps.spawn;
+      f.deps.spawn = (binary, args) => {
+        assert.equal(JSON.parse(fs.readFileSync(preferences, "utf8")).translate.enabled, false);
+        assert(args.includes("--disable-infobars"));
+        return spawn(binary, args);
+      };
+      const session = new (load().ChromeSession)(f.options, f.deps);
+      try { await session.start(); }
+      finally { await session.close(); }
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true });
+  }
+});
+
 test("actual socket inspector checks loopback inode ownership and live child identity", () => {
   const { inspectEndpoint } = load();
   const f = fixture();
