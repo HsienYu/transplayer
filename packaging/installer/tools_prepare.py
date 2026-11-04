@@ -8,6 +8,22 @@ from package_build import HERE, SOURCE, manifest, sha
 
 LOCK = json.loads((HERE / "tools-toolchain.json").read_text())
 
+def foreign_optional(metadata):
+    """The output target is Linux/x64, even when staging on another host."""
+    if metadata.get("optional") is not True:
+        return False
+    excluded = False
+    for field, target in (("os", "linux"), ("cpu", "x64")):
+        values = metadata.get(field, [])
+        if not isinstance(values, list) or not all(
+                isinstance(value, str) and value for value in values):
+            return False  # Malformed constraints never authorize an omission.
+        allowed = [value for value in values if not value.startswith("!")]
+        if ("!" + target in values
+                or (allowed and target not in allowed and "any" not in allowed)):
+            excluded = True
+    return excluded
+
 
 def extract_node(archive, output):
     prefix = "node-v" + LOCK["node"]["version"] + "-linux-x64"
@@ -47,6 +63,10 @@ def prepare(node_archive, npm_root, output):
         if not relative:
             continue
         package = npm_root / relative / "package.json"
+        # npm ci omits e.g. darwin-only fsevents on Linux. Do not excuse
+        # missing applicable packages or hide a present version mismatch.
+        if not package.is_file() and foreign_optional(metadata):
+            continue
         if not package.is_file() or json.loads(package.read_bytes())["version"] != metadata["version"]:
             raise ValueError("Installed supervisor dependency differs from lock")
     # Reject unexpected modules, special files and links except npm's .bin.

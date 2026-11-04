@@ -513,6 +513,92 @@ class DisplaySetupTests(unittest.TestCase):
                 gtk.StyleContext.remove_provider_for_screen.assert_called_once()
 
 class BundleTests(unittest.TestCase):
+    def prepare_supervisor_fixture(self, root, metadata, installed_version=None, link=False):
+        import tools_prepare
+        lock = json.loads((ROOT / "packaging/supervisor/package-lock.json").read_text())
+        relative = "node_modules/fsevents"
+        lock["packages"][relative] = {"version": "2.3.3", **metadata}
+        source = root / "source"
+        shipped = source / "packaging/supervisor/package-lock.json"
+        shipped.parent.mkdir(parents=True)
+        shipped.write_text(json.dumps(lock))
+        npm = root / "npm"
+        npm.mkdir()
+        (npm / "package-lock.json").write_bytes(shipped.read_bytes())
+        for name, data in lock["packages"].items():
+            if not name or name == relative:
+                continue
+            package = npm / name / "package.json"
+            package.parent.mkdir(parents=True, exist_ok=True)
+            package.write_text(json.dumps({"version": data["version"]}))
+        if installed_version is not None:
+            package = npm / relative / "package.json"
+            package.parent.mkdir(parents=True)
+            package.write_text(json.dumps({"version": installed_version}))
+            if link:
+                target = root / "outside-package.json"
+                package.rename(target)
+                package.symlink_to(target)
+        pm2 = npm / "node_modules/pm2/bin/pm2"
+        pm2.parent.mkdir(parents=True)
+        pm2.write_bytes(b"synthetic PM2")
+        archive = root / "node.tar"
+        with tarfile.open(archive, "w") as tar:
+            for name, data in [("node-v24.22.2-linux-x64/bin/node", b"synthetic node"),
+                               ("node-v24.22.2-linux-x64/LICENSE", b"license")]:
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                tar.addfile(member, io.BytesIO(data))
+        tool_lock = json.loads(json.dumps(tools_prepare.LOCK))
+        tool_lock["node"]["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        with patch.object(tools_prepare, "SOURCE", source), \
+             patch.object(tools_prepare, "LOCK", tool_lock):
+            tools_prepare.prepare(archive, npm, root / "tools")
+        return root / "tools"
+
+    def test_supervisor_accepts_missing_only_foreign_platform_optionals(self):
+        for metadata in [
+            {"optional": True, "os": ["darwin"]},
+            {"optional": True, "os": ["!linux"]},
+            {"optional": True, "cpu": ["arm64"]},
+            {"optional": True, "os": ["linux", "!linux"]},
+        ]:
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as folder:
+                tools = self.prepare_supervisor_fixture(Path(folder), metadata)
+                self.assertTrue((tools / "pm2/bin/pm2").is_file())
+                self.assertFalse((tools / "pm2/node_modules/fsevents").exists())
+
+    def test_supervisor_missing_applicable_or_required_packages_still_fail(self):
+        for metadata in [
+            {"os": ["darwin"]},
+            {"optional": False, "os": ["darwin"]},
+            {"optional": "true", "os": ["darwin"]},
+            {"optional": True},
+            {"optional": True, "os": ["linux"]},
+            {"optional": True, "os": ["!darwin"]},
+            {"optional": True, "os": ["any"]},
+            {"optional": True, "cpu": ["x64"]},
+            {"optional": True, "os": "darwin"},
+            {"optional": True, "os": [None]},
+        ]:
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as folder:
+                with self.assertRaises(ValueError):
+                    self.prepare_supervisor_fixture(Path(folder), metadata)
+                self.assertFalse((Path(folder) / "tools").exists())
+
+    def test_supervisor_present_optional_wrong_version_is_not_hidden(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(ValueError):
+                self.prepare_supervisor_fixture(
+                    Path(folder), {"optional": True, "os": ["darwin"]}, "2.3.2")
+            self.assertFalse((Path(folder) / "tools").exists())
+
+    def test_supervisor_optional_package_symlink_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(ValueError):
+                self.prepare_supervisor_fixture(
+                    Path(folder), {"optional": True, "os": ["darwin"]}, "2.3.3", link=True)
+            self.assertFalse((Path(folder) / "tools").exists())
     def test_nested_manifests_are_covered(self):
         import package_build as build
         with tempfile.TemporaryDirectory() as folder:
