@@ -22,6 +22,12 @@ ARM、其他桌面與其他 Ubuntu 版本未列為新安裝支援平台。
 這不是 r10／Ubuntu 26.04 驗收，也不是全程零錯誤的監測證據。
 Ubuntu 25.10 已停止支援，請勿因此自行升級正在播放的現場。
 
+**Ubuntu 18.04 展場正式機使用 r7b portable。**
+Electron 9.3.2 + Chrome-for-Testing 156、NopeCHA 0.6.1，PM2 自動啟動。
+因 glibc 2.27 限制無法使用較新 Electron，透明度必須以軟體合成實現（GPU + 透明無法並存）。
+已部署於 hsu-ms-7d17（i5-11500 / RTX 3050 / nvidia-525），2026-11-04 驗收通過（自動開機播放）。
+詳見 [Ubuntu 18.04 portable 部署指南](docs/ubuntu18-portable.md)。
+
 ## For users / 一般使用者
 
 請先閱讀[使用者安裝與操作指南](docs/user-guide.md)：
@@ -41,7 +47,8 @@ Ubuntu 25.10 已停止支援，請勿因此自行升級正在播放的現場。
 - [測試說明](tests/README.md)及[Ubuntu 26.04 實機驗收程序](tests/manual/ubuntu26-installation.md)。
 - [Ubuntu 25.10 r9 現場 runbook](tests/manual/ubuntu25-r8.md)：只適用既有現場。
 - [分流前完整 README／r9 歷史](docs/history/ubuntu25-r9-readme.md)：保留既有成功、失敗與限制。
-- [歷史 Ubuntu 18.04 指南](tests/manual/ubuntu18-installation.md)：不是新安裝目標。
+- [Ubuntu 18.04 portable (r7b) 部署指南](docs/ubuntu18-portable.md)：正式機安裝、操作與復原。
+- [歷史 Ubuntu 18.04 指南](tests/manual/ubuntu18-installation.md)：舊版參考。
 
 ## Development quick check / 開發快速檢查
 

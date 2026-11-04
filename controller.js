@@ -243,6 +243,7 @@ class Controller {
           "--disable-infobars",
           "--disable-notifications",
           "--disable-features=InfiniteSessionRestore",
+          "--disable-blink-features=AutomationControlled",
           //"--app=https://www.google.com",
           "--mute-audio",
         ];
