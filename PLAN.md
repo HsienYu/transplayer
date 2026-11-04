@@ -106,3 +106,37 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   maintenance/activation window), not during the live test.
 - Next steps: unchanged from the entries above (artist accepts the demo -> enable-hw-decode.sh
   -> build the packed master on host during a quiet window -> wire the packed-alpha path).
+
+### 2026-11-04 09:4x CET -- Claude Opus 4.8 (studio) -- reCAPTCHA diagnosis
+- Symptom: the exhibition kiosk browser (the choreography behind the video) keeps landing on
+  Google's `/sorry/` reCAPTCHA Enterprise interstitial instead of search results. User asked
+  if it was caused by rc2 removing the Chrome infobar; it is NOT (that flag is local-only).
+- Root facts (all verified read-only on host 100.84.243.117):
+  - Live backend is `chrome-first` (runtime.py:247). It spawns Chrome manually in
+    chrome-session.js and NEVER loads a browser extension.
+  - The 7 scene browsers use FIXED ids 13..19 (hardcoded in web-process-new.js), each with its
+    own profile `~/.local/share/transplayer/profiles-r10-basic/se_<id>`. Nothing in the app
+    wipes these; they PERSIST across restarts (only tests rmdir profiles). So "use a fixed
+    profile" is moot -- they are already fixed/persistent.
+  - Every se_* profile already has Google cookies (AEC,NID,SEARCH_SAMESITE,SNID,_GRECAPTCHA,
+    __Secure-STRP) but NONE has `GOOGLE_ABUSE_EXEMPTION` -- i.e. nobody ever solved the
+    challenge in these profiles, so Google keeps gating.
+  - The browser is NOT detectable as automated: `navigator.webdriver=false`, normal UA, 5
+    plugins, en-US. So there is no free "hide automation" fix to restore.
+  - The old `webdriver` backend loaded `nopecha-0.6.1.zip` (auto CAPTCHA solver) +
+    excludeSwitches(enable-automation); `chrome-first` has neither. nopecha was DELIBERATELY
+    removed from the r10 build (package_build.py:102 unlink, asserted absent in
+    installer_cases.py:670, under a "license provenance" gate) and the zip is NOT in the repo,
+    NOT in git history, NOT anywhere on studio, and NOT in the deployed AppDir. It only exists
+    on the legacy build machine (build-portable.py sources it from --legacy node_modules).
+- Approach (a) "re-enable nopecha" is BLOCKED on: (1) the extension artifact is gone from here;
+  (2) re-adding it reverses a deliberate license/distribution decision; (3) reCAPTCHA
+  Enterprise + exhibition volume almost certainly needs nopecha's PAID tier + API key (a paid
+  decision -- not mine to make). Even then, automated solving is ToS-gray.
+- User authorized restarting the piece ("可以重啟城市沒關係") -- so a deploy+restart is allowed
+  once a workable fix is chosen.
+- Realistic levers (awaiting user decision): (b) human-solve the reCAPTCHA once per scene via
+  RustDesk -> GOOGLE_ABUSE_EXEMPTION persists in the (already persistent) profile for a while;
+  (c) slow the search cadence / fewer scenes to reduce challenge frequency; (d) route the
+  choreography through Google's official Programmable Search API (ToS-clean, no captcha, but
+  changes the on-screen aesthetic and has quota/cost). No code changed this round (read-only).
