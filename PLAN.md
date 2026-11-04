@@ -29,10 +29,16 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   persist script is staged on the host (see Handoff Log). Applying it rotates the live
   screens and the physical up/left-right cannot be verified remotely, so it is left for the
   operator/user to run with the `transplayer screens` visual check, then reboot to verify.
-- [todo] Performance fix for dropped frames. Gated on the artist's decision + visual
-  acceptance: opaque-repack+shader, HEVC+alpha, lighter browser choreography, or a stronger
-  playback machine. See [docs/performance.md](docs/performance.md). rc2 (GPU compositing)
-  is already the best deployed state; not changed this round.
+- [~] Performance fix for dropped frames. User authorized altering the artwork/transcoding
+  (2026-11-04); alpha MUST be preserved (browser shows behind the video). Chosen route:
+  opaque-repack (colour-over-alpha vstack) + WebGL recomposite + VA-API/NVDEC. Built this
+  round on the branch: `app/alpha-recomposite.js` + tests (134 green), a standalone demo with
+  a real packed sample staged on the host, and staged operator scripts (`enable-hw-decode.sh`,
+  `make-alpha-pack.sh`). NOT activated. Blocked tonight because no HW-decode path is testable
+  until `nvidia-vaapi-driver` is installed (one operator sudo step) and the artist visually
+  accepts the recomposited playback. Full design + remaining wiring:
+  [docs/alpha-hw-decode-plan.md](docs/alpha-hw-decode-plan.md). rc2 (GPU compositing) stays
+  the deployed state; the live player was not touched.
 - [todo] Physical display orientation acceptance (upright, left/right vs physical mount) —
   needs on-site eyes via `transplayer screens`.
 - [todo] Reboot + autoplay acceptance (after rotation persisted) — not done tonight to avoid
@@ -70,3 +76,22 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   direction in docs/performance.md.
 - Open questions: performance direction (artist decision); physical orientation (needs eyes);
   whether to merge the branch to master.
+
+### 2026-11-04 06:3x CET -- Claude Opus 4.8 (addendum: user authorized altering the artwork)
+- State: User (mid-session, then back to sleep) authorized changing the actual artwork /
+  transcoding to a HW-decodable format, confirming the transparent layer is required (browser
+  behind). Built the opaque-repack + WebGL recomposite path on the branch: module + tests
+  (134 green), standalone demo + real 8s packed sample staged on the host for visual review,
+  operator sudo step (`enable-hw-decode.sh`) and full-master transcode (`make-alpha-pack.sh`)
+  staged, design doc added. Source .webm copied to studio in the background to build the full
+  packed master off the 2-core host.
+- Decisions: Did NOT wire the packed path into the production player, install the VA-API
+  bridge, or touch the running rc2 player. No HW-decode path is verifiable until the operator
+  installs `nvidia-vaapi-driver` (sudo), and the renderer rewrite is a production feature that
+  needs the artist's visual acceptance -- neither is doable blind overnight. The chat-shared
+  sudo password was still not used.
+- Next steps: artist opens the host demo to accept the recomposite approach; run
+  `enable-hw-decode.sh`; build the config-flag + renderer + launcher wiring (TDD); point at
+  the full packed master; verify playback visually + `nvidia-smi dmon` decoder > 0.
+- Open questions: is the recomposited output visually identical to the artist; h264 vs vp9
+  for the packed master (NVDEC both ok; decode-cost A/B not run).

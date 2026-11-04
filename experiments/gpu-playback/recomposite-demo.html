@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Transplayer alpha recomposite demo</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; font-family: sans-serif; }
+      /* Stand-in for the browser content that must show BEHIND the video through its
+         transparent regions. In the real app this is the Chrome search/scroll layer. */
+      #behind {
+        position: fixed; inset: 0; z-index: 0;
+        background: repeating-linear-gradient(45deg, #1b3a5b 0 60px, #b5651d 60px 120px);
+        color: #fff; font-size: 48px; display: flex; align-items: center; justify-content: center;
+        text-align: center;
+      }
+      /* The recomposited video. Transparent where the packed alpha is 0, so #behind shows through. */
+      #cv { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; }
+      #hint { position: fixed; left: 8px; bottom: 8px; z-index: 2; color: #fff;
+              background: rgba(0,0,0,.5); padding: 6px 10px; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div id="behind">背景代表影片後方的瀏覽器內容<br />BACKGROUND = the browser layer behind the video</div>
+    <canvas id="cv"></canvas>
+    <video id="vid" src="packed-sample.mp4" muted loop playsinline autoplay
+           style="display:none"></video>
+    <div id="hint">packed-sample.mp4 (2160x3840 opaque) → WebGL recomposite → RGBA. If the
+      stripes show through the video's transparent areas, the approach works.</div>
+    <script src="alpha-recomposite.js"></script>
+    <script src="recomposite-demo.js"></script>
+  </body>
+</html>
