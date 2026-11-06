@@ -289,6 +289,7 @@ class ChromeSession {
         "--ozone-platform=x11", "--disable-setuid-sandbox",
         "--no-first-run", "--no-default-browser-check", "--password-store=basic",
         "--hide-crash-restore-bubble", "--disable-infobars",
+        "--disable-blink-features=AutomationControlled",
         "--user-data-dir=" + this.options.profileDir,
         "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=" + this.port,
         "--new-window", "about:blank",

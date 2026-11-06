@@ -98,6 +98,9 @@ for (const replacement of [false, true]) {
       await session.start();
       const args = f.calls.find(c => c[0] === "spawn")[2];
       assert.equal(args.filter(a => a === "--disable-infobars").length, 1);
+      // reCAPTCHA mitigation ported from r8/r7b (controller.js:246): reduce the
+      // AutomationControlled blink signal on the live chrome-first launch path.
+      assert.equal(args.filter(a => a === "--disable-blink-features=AutomationControlled").length, 1);
       for (const forbidden of ["--ignore-certificate-errors", "--disable-web-security",
         "--no-sandbox", "--disable-gpu-sandbox", "--safebrowsing-disable-auto-update"])
         assert(!args.some(a => a.startsWith(forbidden)), forbidden);
