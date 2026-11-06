@@ -122,6 +122,43 @@ to minimise automation signal (`navigator.webdriver=false`, normal UA), acceptin
   attached" after rc4, set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` (faster than reinstalling rc3).
   The two extra component SWs (`nkeimhog..`, `glbjnf..`) are CfT built-ins, not ours.
 
+## Status — rc5 same-day snapshot cache (reCAPTCHA still visible on rc4), 2026-11-07
+
+User reported CAPTCHA STILL appears on rc4. Live diagnosis: gating is FREQUENT and is
+reCAPTCHA **Enterprise** (NopeCHA 0.6.1 can't solve it); the 4s retry waits ON the visible
+CAPTCHA page and often re-gates, leaving the window stuck on `/sorry/` until the timeline moves.
+User decision: **cache same-day snapshots** — the machine reboots daily, the first cycles after
+boot are clean (evidence: first `sorry-retry` at out.log line 5729 of 6238, a long clean run
+first), so capture each query's good page during the clean warm-up and SERVE the cached snapshot
+whenever Google later gates. Content is always at least today's data, never a CAPTCHA.
+
+Validated before building:
+- Warm-up window is real (gating starts well after boot).
+- **MHTML fidelity CONFIRMED**: captured a real clean page from the live host ("map of melaka
+  fort", 201 images, 12 MB MHTML via CDP `Page.captureSnapshot`), reloaded it OFFLINE on studio
+  via `file://` — rendered 201/201 images, full results page, visually identical. Screenshot in
+  scratchpad `p2/reloaded.png`.
+- AppArmor chrome-first profile is `flags=(unconfined){userns}` — `file://` reads work anywhere
+  the user can read; cache goes under `<TRANSPLAYER_PROFILE_DIR>/snapshots/`.
+
+- [todo] `chrome-session.js`: add `captureSnapshot()` (http `/json/list` on `this.port` -> page
+  target ws -> CDP `Page.captureSnapshot {format:mhtml}` -> return data), mirroring `closeBrowser`.
+- [todo] `controller.js`: cache logic (TDD, pure). `snapshotPath(url)` = sha256(url) under
+  `<profileRoot>/snapshots/`. `goTo`: on `/sorry/`, if a snapshot exists -> `get(file://<snap>)`
+  (log `served-snapshot`), else retry once (keep rc4 behaviour); on a clean landing mark the id
+  for capture. `scrollTo` finally: `maybeCapture` -> if marked + no existing snapshot, capture via
+  `session.captureSnapshot()` and write atomically (first-clean-wins, size-guarded). Clear the
+  snapshot dir on controller construct (guarded by env) so each daily reboot starts same-day.
+- [todo] TDD in `tests/controller.test.js`: snapshotPath hashing; goTo serves cached file:// on
+  /sorry/+hit (no retry); goTo retries on /sorry/+miss (rc4 behaviour preserved); maybeCapture
+  writes on marked+uncached, skips when gated or already cached; initSnapshots clears when env set.
+- [todo] Bump `release.json` to rc5; build (studio stage -> host dpkg-deb); install; live-verify:
+  after a reboot, confirm snapshots populate during warm-up (`cached-snapshot` lines), then when
+  gating starts confirm `served-snapshot` lines and that the displays show results, not CAPTCHA.
+- [todo] Optional `transplayer snapshot-seed` CLI (run the 13 queries slowly once after boot to
+  guarantee the cache) — only if a reboot shows gating inside the first cycle. HOLD the GitHub
+  release until rc5 verified (rc4 still shows CAPTCHA; do not ship it to museums).
+
 ## Status (prior — retired Celeron host, history)
 
 - [done] Diagnose the dropped-frames root cause with primary evidence (VP9 + `alpha_mode=1`;

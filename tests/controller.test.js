@@ -216,6 +216,85 @@ test("goTo retries at most once even when the retry also lands on /sorry/", asyn
   assert.equal(f.calls.get.length, 2);
 });
 
+const os = require("node:os");
+const fsReal = require("node:fs");
+
+function snapFixture(currentUrls = [], profileDir) {
+  const dir = profileDir || fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
+  const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
+  const controller = new Controller();
+  controller.SORRY_RETRY_MS = 0;
+  const calls = { get: [] };
+  let idx = 0;
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return currentUrls[idx++] ?? "https://www.google.com/search?q=x&udm=2#ip=1"; },
+  };
+  controller.getWebDriver = async () => driver;
+  return { controller, driver, calls, dir };
+}
+
+test("snapshotPath maps a query URL to a stable file under the profile snapshots dir", () => {
+  const f = snapFixture();
+  const q = "https://www.google.com/search?q=elephant&tbm=isch";
+  assert.equal(f.controller.snapshotPath(q), f.controller.snapshotPath(q));
+  assert(f.controller.snapshotPath(q).startsWith(path.join(f.dir, "snapshots") + path.sep));
+  assert(f.controller.snapshotPath(q).endsWith(".mhtml"));
+  assert.notEqual(f.controller.snapshotPath(q),
+    f.controller.snapshotPath("https://www.google.com/search?q=other&tbm=isch"));
+});
+
+test("goTo serves a cached same-day snapshot instead of showing /sorry/ (no retry)", async () => {
+  const f = snapFixture(["https://www.google.com/sorry/index?x"]);
+  const url = "https://www.google.com/search?q=x&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  assert.equal(await f.controller.goTo(14, url), true);
+  assert.deepEqual(f.calls.get, [url, "file://" + snap]);
+});
+
+test("goTo falls back to the rc4 retry when /sorry/ and no snapshot exists", async () => {
+  const f = snapFixture(["https://www.google.com/sorry/index?x",
+    "https://www.google.com/search?q=x&udm=2#ip=1"]);
+  const url = "https://www.google.com/search?q=x&tbm=isch";
+  assert.equal(await f.controller.goTo(14, url), true);
+  assert.deepEqual(f.calls.get, [url, url]); // retried same url, did not serve a file://
+});
+
+test("scrollTo capture caches a clean page once (first-clean-wins)", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=cap&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[15] = { captureUrl: url,
+    session: { captureSnapshot: async () => { captures++; return "M".repeat(200000); } } };
+  await f.controller.maybeCapture(15);
+  assert.equal(captures, 1);
+  assert(fsReal.existsSync(f.controller.snapshotPath(url)));
+  f.controller.browsers[15].captureUrl = url; // ask again
+  await f.controller.maybeCapture(15);
+  assert.equal(captures, 1); // already cached -> no second capture
+});
+
+test("maybeCapture does not capture a gated page", async () => {
+  const f = snapFixture();
+  let captures = 0;
+  f.controller.browsers[16] = { captureUrl: null,
+    session: { captureSnapshot: async () => { captures++; return "x".repeat(200000); } } };
+  await f.controller.maybeCapture(16);
+  assert.equal(captures, 0);
+});
+
+test("constructing the controller clears stale snapshots for a same-day cache", () => {
+  const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
+  const snaps = path.join(dir, "snapshots");
+  fsReal.mkdirSync(snaps, { recursive: true });
+  fsReal.writeFileSync(path.join(snaps, "stale.mhtml"), "old");
+  const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
+  new Controller();
+  assert(!fsReal.existsSync(path.join(snaps, "stale.mhtml")));
+});
+
 test("every controller operation used by the live timeline remains available", () => {
   const Controller = controllerClass();
   const timeline = fs.readFileSync(path.join(__dirname, "../web-process-new.js"), "utf8");

@@ -7,6 +7,7 @@ const { ServiceBuilder, Options } = require("selenium-webdriver/chrome");
 const driverPath = process.env.TRANSPLAYER_DRIVER || path.join(__dirname, "./bin/chrome/chromedriver");
 
 const fs = require("fs");
+const crypto = require("crypto");
 const encodeExt = (file) => {
   const stream = fs.readFileSync(path.resolve(file));
   return Buffer.from(stream).toString("base64");
@@ -34,13 +35,78 @@ class Controller {
   XPATH_GOOGLE_NEWS_SEARCH_RESULT_URL = `//div[@id="search"]/div/div[@id="rso"]/div/g-card/div/div/div[@class="dbsr"]/a`;
   XPATH_GOOGLE_VIDEO_SEARCH_RESULT_URL = `//div[@id="search"]//div[@class="srg"]/div[@class="g"]/div/div/div/a`;
 
+  // Smallest MHTML worth caching; a real image-results page is several MB, a block/error page is tiny.
+  SNAPSHOT_MIN_BYTES = 100 * 1024;
+
   constructor() {
     /** @type {Object.<number, {driver: WebDriver|null, scrollState: number, pid: number}>} */
     this.browsers = {};
 
     /** @type {boolean} default is true */
     this.useLocalProfile = true;
+
+    // Same-day snapshot cache: the exhibition reboots daily and the first cycles after boot are
+    // un-gated, so clean results are captured then and served when Google later serves /sorry/.
+    // Clear on construct (once per process = once per daily boot) so the cache is always same-day.
+    this.initSnapshots();
   }
+
+  snapshotRoot() {
+    return path.join(process.env.TRANSPLAYER_PROFILE_DIR ||
+      path.join(os.homedir(), ".local/share/transplayer/profiles-r9-basic"), "snapshots");
+  }
+
+  snapshotPath(url) {
+    const hash = crypto.createHash("sha256").update(String(url)).digest("hex").slice(0, 32);
+    return path.join(this.snapshotRoot(), hash + ".mhtml");
+  }
+
+  hasSnapshot(url) {
+    try { return fs.statSync(this.snapshotPath(url)).size >= this.SNAPSHOT_MIN_BYTES; }
+    catch (_) { return false; }
+  }
+
+  initSnapshots() {
+    // Only clear when running with a configured profile (production). Never touch arbitrary paths
+    // in tests/CLIs that have no TRANSPLAYER_PROFILE_DIR.
+    if (!process.env.TRANSPLAYER_PROFILE_DIR) return;
+    try { fs.rmSync(this.snapshotRoot(), { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  }
+
+  writeSnapshot(url, data) {
+    if (typeof data !== "string" || data.length < this.SNAPSHOT_MIN_BYTES) return false;
+    const target = this.snapshotPath(url);
+    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+    const temp = target + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
+    try {
+      fs.writeFileSync(temp, data, { mode: 0o600 });
+      fs.renameSync(temp, target);
+      return true;
+    } catch (error) {
+      try { fs.rmSync(temp, { force: true }); } catch (_) { /* ignore */ }
+      throw error;
+    }
+  }
+
+  // Capture the current clean page of a window into the same-day cache (first-clean-wins).
+  async maybeCapture(id) {
+    const entry = this.browsers[id];
+    if (!entry || !entry.captureUrl || !entry.session ||
+        typeof entry.session.captureSnapshot !== "function") return;
+    const url = entry.captureUrl;
+    entry.captureUrl = null; // one-shot per clean navigation
+    if (this.hasSnapshot(url)) return; // already cached today
+    try {
+      const mhtml = await entry.session.captureSnapshot();
+      if (this.writeSnapshot(url, mhtml))
+        console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length}`);
+    } catch (error) {
+      console.error("snapshot capture failed", error && error.message);
+    }
+  }
+
+  _markCapture(id, url) { if (this.browsers[id]) this.browsers[id].captureUrl = url; }
+  _clearCapture(id) { if (this.browsers[id]) this.browsers[id].captureUrl = null; }
 
   async getPageHeight(id) {
     let driver = await this.getWebDriver(id);
@@ -442,9 +508,22 @@ class Controller {
       await driver.get(theUrl);
       let landed = await driver.getCurrentUrl();
       if (typeof landed === "string" && landed.includes("/sorry/")) {
+        // Prefer a same-day cached snapshot over ever showing the CAPTCHA page.
+        if (this.hasSnapshot(theUrl)) {
+          console.log(`CAPTCHA served-snapshot id=${theId} url=${theUrl}`);
+          await driver.get("file://" + this.snapshotPath(theUrl));
+          this._clearCapture(theId);
+          return true;
+        }
+        // No snapshot yet (early, pre-capture): retry once after a short wait.
         console.log(`CAPTCHA sorry-retry id=${theId} url=${theUrl}`);
         await sleep(this.SORRY_RETRY_MS);
         await driver.get(theUrl);
+        landed = await driver.getCurrentUrl();
+        if (typeof landed === "string" && landed.includes("/sorry/")) this._clearCapture(theId);
+        else this._markCapture(theId, theUrl);
+      } else {
+        this._markCapture(theId, theUrl);
       }
       return true;
     } catch (error) {
@@ -484,6 +563,8 @@ class Controller {
       return false;
     } finally {
       if (this.browsers[theId]) this.browsers[theId].scrollState = -1;
+      // A clean page is fully image-loaded after the scroll; capture it into the same-day cache.
+      await this.maybeCapture(theId);
       return true;
     }
   }

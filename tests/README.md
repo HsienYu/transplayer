@@ -73,6 +73,14 @@ solver is present and omits it under `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1`,
 and unit-tests `captchaExtensionDir` (flag + directory-exists gating). CfT 156
 was observed to raise no developer-mode warning bubble under `--disable-infobars`;
 end-to-end solve completion is environment-dependent and not asserted.
+rc5 adds the same-day snapshot cache. `controller.test.js` covers the pure logic:
+`snapshotPath` stable hashing under `<profileRoot>/snapshots/`; `goTo` serving a cached
+`file://` MHTML on `/sorry/` when a snapshot exists (no retry) and falling back to the rc4
+retry when it does not; `maybeCapture` writing once (first-clean-wins), skipping a gated page,
+and the constructor clearing stale snapshots when `TRANSPLAYER_PROFILE_DIR` is set. The
+`ChromeSession.captureSnapshot` CDP plumbing (MHTML via `Page.captureSnapshot`) was validated
+against a real Chrome and by reloading a live-captured 12 MB page offline (201/201 images);
+MHTML fidelity is environment evidence, not a unit assertion.
 `installer_cases.py` adds direction-only pattern planning from logical
 geometry, independent rotation metadata, reversed enumeration/negative
 origins, malformed/mirrored/gapped/offset layout rejection, fixed settings

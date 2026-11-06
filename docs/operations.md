@@ -89,9 +89,16 @@ chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`、`--d
 不使用 `--restore-last-session`、不偽造正常退出，
 也不刪除專用 profile、session 檔或 SingletonLock。
 rc4 起另以 `--load-extension=<app/nopecha>` 載入 NopeCHA solver（藝術家 2026-11-06 授權），
-可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。另外 `controller.goTo` 在導向後若
-落在 `/sorry/` 會記錄 `CAPTCHA sorry-retry` 並等待 `SORRY_RETRY_MS`（4 秒）重載一次；
-/sorry/ 為單次軟性判定，換頁即自行消失，故重載即可恢復。
+可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。
+
+**rc5 當日快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA
+Enterprise，NopeCHA 解不了）會頻繁出現且常常連重載也被擋。因展場機每日重開機、開機後前幾輪
+多為乾淨，`controller` 在乾淨結果捲動後會透過 CDP `Page.captureSnapshot` 把整頁存成 MHTML
+（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`，first-clean-wins，建構時清空＝每日重置）。
+之後任何一次 `goTo` 落在 `/sorry/` 時，若已有該查詢的當日快照就改以 `file://` 載入（log
+`CAPTCHA served-snapshot`），畫面永遠是當日搜尋結果而非 CAPTCHA。尚無快照時（開機初期）才退回
+`CAPTCHA sorry-retry`：等 `SORRY_RETRY_MS`（4 秒）重載一次。擷取記錄為 `CAPTCHA cached-snapshot`。
+AppArmor chrome-first profile 為 `flags=(unconfined){userns}`，故 `file://` 讀取不受限。
 GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併
 Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求；不修改退出狀態、
 私人 profile 或憑證／Safe Browsing 設定。實際瀏覽器 UI 仍須另驗。

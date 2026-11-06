@@ -228,6 +228,49 @@ function closeBrowser(url) {
     ws.addEventListener("error", () => finish(new Error("Browser.close transport failed")));
   });
 }
+function debuggerJson(port, pathname) {
+  return new Promise((resolve, reject) => {
+    const request = http.get({ hostname: "127.0.0.1", port, path: pathname, timeout: 3000 }, response => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", chunk => {
+        text += chunk;
+        if (text.length > 4 * 1024 * 1024) request.destroy(new Error("Oversized debugger listing"));
+      });
+      response.once("end", () => {
+        try {
+          if (response.statusCode !== 200) throw new Error("Debugger HTTP request failed");
+          resolve(JSON.parse(text));
+        } catch (error) { reject(error); }
+      });
+      response.once("error", reject);
+    });
+    request.once("timeout", () => request.destroy(new Error("Debugger request timed out")));
+    request.once("error", reject);
+  });
+}
+function cdpCommand(url, method, params, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error(method + " timed out")), timeoutMs);
+    function finish(error, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws.close(); } catch (_) { /* already closing */ }
+      if (error) reject(error); else resolve(value);
+    }
+    ws.addEventListener("open", () => ws.send(JSON.stringify({ id: 1, method, params: params || {} })));
+    ws.addEventListener("message", event => {
+      let message; try { message = JSON.parse(event.data); } catch (_) { return; }
+      if (message.id === 1)
+        finish(message.error ? new Error(method + " rejected") : null, message.result);
+    });
+    ws.addEventListener("error", () => finish(new Error(method + " transport failed")));
+    ws.addEventListener("close", () => finish(new Error(method + " closed before reply")));
+  });
+}
 async function waitExit(child, milliseconds) {
   const deadline = Date.now() + milliseconds;
   while (alive(child) && Date.now() < deadline) await sleep(25);
@@ -280,6 +323,19 @@ class ChromeSession {
   start() {
     if (!this.starting) this.starting = this._start();
     return this.starting;
+  }
+  // Capture the live page of this window as self-contained MHTML (for the same-day snapshot cache).
+  async captureSnapshot() {
+    if (!this.port) throw new Error("Chrome session has no debugger port");
+    const targets = await debuggerJson(this.port, "/json/list");
+    const page = Array.isArray(targets) &&
+      targets.find(t => t && t.type === "page" && typeof t.webSocketDebuggerUrl === "string");
+    if (!page) throw new Error("No page target available for snapshot");
+    const result = await cdpCommand(page.webSocketDebuggerUrl,
+      "Page.captureSnapshot", { format: "mhtml" }, 20000);
+    if (!result || typeof result.data !== "string" || !result.data.length)
+      throw new Error("Empty MHTML snapshot");
+    return result.data;
   }
   checkStopped() {
     if (this.stopped) throw new Error("Chrome session stopped during startup");

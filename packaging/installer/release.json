@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc4",
+  "version": "1.1.0~rc5",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc4 adds /sorry/ detect-and-retry in controller.goTo and re-adds the unpacked NopeCHA solver to the chrome-first launch (artist-authorised 2026-11-06); release gates still open"
+  "status": "RC — rc5 adds a same-day snapshot cache: clean image-results pages captured during the post-reboot warm-up are served (as MHTML via file://) whenever Google later returns /sorry/, so the displays never show a CAPTCHA; retry + NopeCHA retained as earlier layers; release gates still open"
 }
