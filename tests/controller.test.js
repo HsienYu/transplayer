@@ -181,6 +181,41 @@ test("failed quit reports failure while clearing the browser reference", async (
   assert.equal(controller.browsers[1], null);
 });
 
+function goToFixture(currentUrls) {
+  const Controller = controllerClass();
+  const controller = new Controller();
+  controller.SORRY_RETRY_MS = 0; // keep the test fast; production waits a few seconds
+  const calls = { get: [], current: 0 };
+  const settled = "https://www.google.com/search?q=x&udm=2#ip=1";
+  const driver = {
+    async get(url) { calls.get.push(url); },
+    async getCurrentUrl() { return currentUrls[calls.current++] ?? settled; },
+  };
+  controller.getWebDriver = async () => driver;
+  return { controller, calls, driver };
+}
+
+const REQUEST_URL = "https://www.google.com/search?q=x&tbm=isch";
+const SORRY_URL = "https://www.google.com/sorry/index?continue=https://www.google.com/search";
+
+test("goTo retries once when Google serves a /sorry/ abuse page", async () => {
+  const f = goToFixture([SORRY_URL, "https://www.google.com/search?q=x&udm=2#ip=1"]);
+  assert.equal(await f.controller.goTo(14, REQUEST_URL), true);
+  assert.deepEqual(f.calls.get, [REQUEST_URL, REQUEST_URL]);
+});
+
+test("goTo does not retry when the first navigation lands on a real result", async () => {
+  const f = goToFixture(["https://www.google.com/search?q=x&udm=2#ip=1"]);
+  assert.equal(await f.controller.goTo(14, REQUEST_URL), true);
+  assert.deepEqual(f.calls.get, [REQUEST_URL]);
+});
+
+test("goTo retries at most once even when the retry also lands on /sorry/", async () => {
+  const f = goToFixture([SORRY_URL, SORRY_URL]);
+  assert.equal(await f.controller.goTo(14, REQUEST_URL), true);
+  assert.equal(f.calls.get.length, 2);
+});
+
 test("every controller operation used by the live timeline remains available", () => {
   const Controller = controllerClass();
   const timeline = fs.readFileSync(path.join(__dirname, "../web-process-new.js"), "utf8");

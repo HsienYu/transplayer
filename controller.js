@@ -24,6 +24,9 @@ function sleep(ms) {
 class Controller {
   SCROLL_GAP = 1;
   SCROLL_INTERVAL = 10;
+  // Google serves a soft /sorry/ abuse interstitial on some requests; the same query
+  // reloads clean a few seconds later. Detect it and retry once. Short wait, no loop.
+  SORRY_RETRY_MS = 4000;
 
   XPATH_GOOGLE_SEARCH_RESULT_URL =
     "//div[contains(@class, 'srg')]//div[@class='g']/div/div[@class='rc']/div[@class='r']/a[1]";
@@ -437,6 +440,12 @@ class Controller {
       // }//
 
       await driver.get(theUrl);
+      let landed = await driver.getCurrentUrl();
+      if (typeof landed === "string" && landed.includes("/sorry/")) {
+        console.log(`CAPTCHA sorry-retry id=${theId} url=${theUrl}`);
+        await sleep(this.SORRY_RETRY_MS);
+        await driver.get(theUrl);
+      }
       return true;
     } catch (error) {
       console.error(`GET ERROR: ${theUrl}`);

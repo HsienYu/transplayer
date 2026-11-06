@@ -51,6 +51,42 @@ reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag
 - [todo] Warning-bar: operator to report the exact bar text if any (``--test-type`` deliberately
   NOT added — it re-introduces an automation signal).
 
+## Status — rc4 reCAPTCHA handling (retry + NopeCHA), 2026-11-06
+
+Workflow: Full TDD (controller retry = logic) + Production change (new deb on the live
+exhibition host). User decision 2026-11-06 22:48 CET (21:48Z): `先1+2` — do BOTH the
+detect-and-retry AND re-add NopeCHA auto-solve.
+
+Evidence that reframed the problem (read-only CDP on host port 39767, 2026-11-06):
+a search window was on `/sorry/index?...q=history+gunpowder`, and on the controller's very
+next `goTo` the SAME window (same profile, same cookies, same IP) loaded a clean
+`?q=+explosion` search. So Google's `/sorry/` is a **soft per-request decision**, not sticky
+cookie/session flagging and not a hard IP block. Therefore: cookie removal is NOT the lever
+(and clearing would wipe any `GOOGLE_ABUSE_EXEMPTION`); a short-wait retry is. Also: r8 never
+"avoided" reCAPTCHA — NopeCHA auto-SOLVED it; r10 chrome-first dropped the solver for the
+license reason (`package_build.py:102` strips `nopecha-0.6.1.zip`), and chrome-first was chosen
+to minimise automation signal (`navigator.webdriver=false`, normal UA), accepting no solver.
+
+- [todo] (1) `controller.js` goTo: after `driver.get(url)`, if `getCurrentUrl()` contains
+  `/sorry/`, log a structured `sorry-retry` line, wait `SORRY_RETRY_MS` (4000), `get(url)` once.
+  One retry, no loop. TDD in `tests/controller.test.js` (fake driver): sorry-then-clean -> get x2
+  + sleep; clean-first -> get x1, no sleep; sorry-twice -> get exactly x2. Red first.
+- [todo] (2) NopeCHA empirical check on STUDIO before shipping: unpack nopecha 0.6.1 + spawn
+  chrome-for-testing 156 with the exact chrome-session.js arg list + `--load-extension=<dir>`;
+  check (a) no developer-mode warning bubble under `--disable-infobars` (the 警示-bar goal;
+  `--test-type` is OFF-LIMITS), (b) extension actually loads (`chrome://extensions` via
+  `/json/list`), (c) NopeCHA 0.6.1 free tier still auto-solves `recaptcha/api2/demo`.
+- [todo] (2) Decision gate: clean+loads+solves -> wire into `chrome-session.js` behind an env
+  flag (mirror `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION`), make `package_build.py:102` strip
+  conditional, unpack to `app/nopecha/` at build time (no runtime unzip), ship in rc4. If it
+  bubbles or does not solve -> report to user; retry ships alone as rc4, NopeCHA gets rc5 or is
+  dropped. Do NOT spend a day on Secure-Preferences HMAC / ExtensionInstallForcelist.
+- [todo] Bump `release.json` to `1.1.0~rc4`; build (studio stage -> host dpkg-deb, same split as
+  rc3); install on host. ROLLBACK = rc3 deb still at `~/.cache/transplayer-builds/r10-rc3-*/`.
+- [todo] Live verify (DoD #7): poll `/json/list` through one full timeline cycle, count `/sorry/`
+  sightings before/after; grep out.log for `sorry-retry` lines and confirm the follow-up nav
+  landed clean. Timestamps from `date`.
+
 ## Status (prior — retired Celeron host, history)
 
 - [done] Diagnose the dropped-frames root cause with primary evidence (VP9 + `alpha_mode=1`;
