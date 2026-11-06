@@ -29,12 +29,21 @@ reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag
   transplayer/`/opt/transplayer`, dpkg --audit clean, 8080 free, apt simulate
   **0 upgraded, 10 newly installed, 0 to remove**. Deb + .sha256 + INSTALL.txt staged at
   `~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/` on the host.
-- [todo] OPERATOR (sudo): `sudo apt-get install --no-remove --no-upgrade ./transplayer_1.1.0~rc3_amd64.deb`
-  — require the 0/10/0 plan; stop on any upgrade/removal. sudo is password-gated; not runnable
-  from here. See the host INSTALL.txt.
-- [todo] ON-SITE (desktop, needs eyes): `transplayer setup` (video path), GNOME portrait
-  rotation per display + `transplayer screens` UP/LEFT/RIGHT, `enable-extension` + logout/login,
-  `configure --autostart`, visual playback/transparency, then reboot-autoplay.
+- [done] Installed `transplayer 1.1.0~rc3` via `sudo apt-get install --no-remove --no-upgrade`
+  (user supplied the sudo password in session, 2026-11-06; apt plan was exactly 0/10/0 as
+  predicted). Verified: `ii` state, `dpkg --audit` clean, both AppArmor profiles loaded
+  (transplayer-r10-chrome/-electron), `/usr/bin/transplayer`, and the AutomationControlled flag
+  present in the INSTALLED payload `/opt/transplayer/releases/r10.AppDir/app/chrome-session.js`.
+- [done] Headless `transplayer configure --video .../stonesandelephants.webm --autostart`
+  (over SSH as hcw): config.json written (start 775, 2160x1920), autostart entry
+  `~/.config/autostart/transplayer-r10.desktop` (Exec `transplayer login`).
+- [todo] ON-SITE (desktop session, needs eyes — NOT doable over SSH): `transplayer doctor`
+  shows platform PASS but desktop NOT_READY, and `enable-extension` returns 78 over SSH. On the
+  physical GNOME session: `transplayer enable-extension` + logout/login (loads the revision-3
+  lease), set two 1080x1920 PORTRAIT panels in GNOME Settings + confirm with `transplayer screens`
+  UP/LEFT/RIGHT, then `transplayer start` and watch playback/transparency; reboot to verify
+  autoplay. Autostart `login` will correctly refuse until the extension is loaded and displays
+  are portrait.
 - [todo] reCAPTCHA: human-solve once per scene profile (user decision 2026-11-06); confirm
   /sorry/ clears after the first cycle. Flag alone does not remove abuse gating.
 - [todo] RE-MEASURE dropped frames on this i5/RTX-4060 host BEFORE any packed-alpha work — the
@@ -202,3 +211,13 @@ reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag
   stronger host before any packed-alpha work; report the warning-bar text if one shows.
 - Open questions: exact display panels on the new host (not verified); whether to merge this
   branch to fix/r10 / master (user's call); lintian/license/vuln release gates still open.
+
+### 2026-11-06 15:54 CET (14:54Z) -- Claude Opus 4.8 (studio) -- addendum: installed + configured
+- User supplied the hcw sudo password in session and authorized the install ("安全性問題不用在意
+  這是展覽用的作品"). Installed rc3 (0/10/0 as predicted), verified ii/audit/AppArmor/flag-in-payload.
+  Ran headless configure (video + autostart). Password used transiently via sudo -S; NOT written
+  to any file/commit/memory. (PLAN note from the retired host still suggests rotating it.)
+- Remote boundary reached: desktop NOT_READY over SSH (enable-extension -> 78). Extension enable +
+  logout/login, GNOME portrait rotation, and visual playback/reCAPTCHA acceptance are on-site only.
+- Branch HsienYu/transplayer-deploy pushed (9ad3086 + this PLAN update). Suite 134/134 on studio
+  Node 26 AND host Node 24.22.2.
