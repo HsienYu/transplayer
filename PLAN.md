@@ -87,13 +87,36 @@ to minimise automation signal (`navigator.webdriver=false`, normal UA), acceptin
   the zip to `app/nopecha/` (path-traversal guarded); `package_build.py` still strips the packed
   zip (webdriver path dead) and keeps the unpacked dir. TDD: 3 chrome-session tests red->green +
   installer staging test asserts dir survives / zip stripped. Full suite 140/140 Node + 52 Python.
-- [todo] Build `transplayer_1.1.0~rc4_amd64.deb` (studio stage -> host dpkg-deb, same split as
-  rc3); install on host. ROLLBACK = rc3 deb at `~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/`,
-  OR set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` in the operator env to drop just the solver.
-- [todo] Live verify (DoD #7): confirm out.log says `captcha-extension loaded .../app/nopecha`;
-  poll `/json/list` through one full timeline cycle, count `/sorry/` sightings before/after; grep
-  out.log for `CAPTCHA sorry-retry` lines and confirm the follow-up nav landed clean. Timestamps
-  from `date`.
+- [done] Build `transplayer_1.1.0~rc4_amd64.deb` (290,718,208 B, SHA-256
+  b2a8dbc051a6dfc04b55d944b005154c4f24f391485bb2cf5dbc2322f23ab104). Reconstructed the full
+  SHA-pinned toolchain on studio (CfT 156 b711c720.., chromedriver cae58bbd.., nopecha cfbbe7b3..,
+  Electron 45.1.0 9dafab2c.., Node 24.22.2 48cc0e21..), npm ci (app + supervisor), build-portable
+  -> prepare-supervisor -> build-deb --stage; rsync bundle+tools to host; build-deb --build
+  (dpkg-deb) on host. Bundle manifest SHA dd8ce028.., tools manifest SHA 2c279cf5.. (tools
+  reproduced rc3). Build dir `~/.cache/transplayer-builds/r10-rc4-20261106T221042Z/`.
+- [done] Installed rc4 on host 2026-11-06 (user: 「你直接用密碼幫我裝就好」; sudo via -S, value
+  NOT recorded). First apt attempt correctly REFUSED by the prerm guard (flock on
+  /var/lib start.lock) because the player was live, leaving rc3 half-configured (iF). Recovery:
+  `transplayer stop` (needed DISPLAY=:0 + XAUTHORITY=/run/user/1000/.mutter-Xwaylandauth.* in the
+  SSH env to pass app_state) + `prepare-maintenance` (pm2 kill, autostart removed) -> player down,
+  8080 free, lock released -> `dpkg --configure -a` back to clean rc3 ii -> `apt install rc4`
+  (1 upgraded/0/0) -> ii 1.1.0~rc4. Re-ran `configure --video .. --autostart` (needs --video even
+  for --autostart) to restore the autostart entry, then rebooted.
+- [done] Live verify (DoD #7), post-reboot 2026-11-06 ~23:20 CET: doctor platform+desktop PASS,
+  displays persisted portrait (transform 1 @ x0/x1080), extension ACTIVE, PM2+player online, 8080
+  listening, chrome-first debug port up. out.log `captcha-extension loaded .../app/nopecha` (solver
+  on); NopeCHA SW `dknlfmjaanfblgfdfebhijalfmhmjjjo` present in CDP. **Retry fired on real gates**:
+  `CAPTCHA sorry-retry id=13 world news qdr:d` + `id=14 elephant news qdr:y` (the recency-filtered
+  queries most prone to gating); the world-news window then landed clean on `udm=2#ip=1`. Final
+  CDP poll: pages GATED 0 / clean-search 1 (nothing stuck on /sorry/). No `another debugger`
+  errors in error.log (NopeCHA chrome.debugger + chromedriver coexist cleanly so far). Playback
+  advancing 30->65s, frames 930->1807, **dropped:0**. ROLLBACK = rc3 deb at
+  `~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/`, OR `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1`
+  to drop just the solver.
+- [todo] Soak / over-time observation: the two retries both recovered this cycle, but reCAPTCHA
+  frequency over hours and NopeCHA's real solve rate on the exhibition are not yet characterised.
+  Watch error.log for `another debugger` (then set the disable env). Release gates
+  (lintian/license/vuln/soak) still open before any stable promotion / master merge.
 - [todo] WATCH (not blockers): NopeCHA holds `chrome.debugger`; chromedriver attaches at browser
   level. r7b ran this combo for years, but if `executeScript` starts throwing "another debugger is
   attached" after rc4, set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` (faster than reinstalling rc3).
@@ -289,3 +312,25 @@ to minimise automation signal (`navigator.webdriver=false`, normal UA), acceptin
   running on hcw-MS-7D17. This is a point-in-time on-site confirmation, NOT a long-duration soak,
   not a full reCAPTCHA-over-time result, and not a stable release (lintian/license/vuln/soak gates
   still open). Flip: deployment+autoplay DONE; soak + reCAPTCHA-in-practice + release gates remain.
+
+### 2026-11-06 23:25 CET (22:25Z) -- Claude Opus 4.8 (studio) -- rc4 reCAPTCHA handling deployed + live-verified
+- State: rc4 built, installed and reboot-verified on hcw-MS-7D17. Two reCAPTCHA layers now live:
+  (1) `controller.goTo` detects `/sorry/` and retries once after 4s; (2) NopeCHA solver re-added to
+  the chrome-first launch via `--load-extension=.../app/nopecha` (artist-authorised 先1+2). Full
+  suite 140/140 Node + 52+15 Python. Commits 8102b4a (retry) + 28dd5ce (solver) on
+  HsienYu/transplayer-deploy. Live evidence captured: solver loaded, 2 sorry-retries fired on the
+  qdr:d/qdr:y queries and recovered to clean results, 0 windows stuck on /sorry/, no debugger
+  conflict, playback dropped:0.
+- Decisions: cookie-removal rejected (evidence: /sorry/ is a soft per-request gate that clears on
+  the next nav with no cookie change; clearing would wipe GOOGLE_ABUSE_EXEMPTION). Engine-switch
+  rejected (piece is curated Google image search; timeline + tests bound to it). Retry is the
+  reliable layer; NopeCHA is a probabilistic second layer whose solve-completion could not be
+  proven on studio (flagged headful env loops challenges). NopeCHA gated by
+  `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION` for instant operator rollback.
+- Next steps: soak / over-time reCAPTCHA-frequency + NopeCHA solve-rate observation on the live
+  machine; watch error.log for `another debugger` (chrome.debugger vs chromedriver). Release gates
+  (lintian/license/vuln/soak) remain before any stable promotion or master merge. The sudo password
+  the artist shared in-session should still be rotated.
+- Open questions: real-world NopeCHA efficacy on the exhibition (low-signal, residential IP) vs the
+  flagged studio test; whether to add `udm=2` rewrite to the hardcoded `tbm=isch` URLs (halves the
+  redirects Google sees) in a later rc.
