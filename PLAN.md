@@ -221,3 +221,15 @@ reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag
   logout/login, GNOME portrait rotation, and visual playback/reCAPTCHA acceptance are on-site only.
 - Branch HsienYu/transplayer-deploy pushed (9ad3086 + this PLAN update). Suite 134/134 on studio
   Node 26 AND host Node 24.22.2.
+
+### 2026-11-06 16:49 CET (15:49Z) -- Claude Opus 4.8 (studio) -- reboot verified: autoplay + 0 dropped frames
+- Rotated both ASUS VP247 panels to portrait (Mutter ApplyMonitorsConfig applied live but did
+  NOT persist; wrote ~/.config/monitors.xml by hand, rotation=left x0/x1080, backup .landscape.bak),
+  then rebooted (user asked, user sudo). Post-boot: doctor platform+desktop PASS, displays persisted
+  portrait 2160x1920, extension ACTIVE, PM2 player online, 8080 listening, full Electron tree
+  (video+web-process+guard+gpu+audio). out.log PLAYBACK currentTime 0->85s, frames 176->2305,
+  **dropped:0** (Celeron was ~38%) -> packed-alpha HW-decode rework likely unnecessary on this host.
+- Needs on-site eyes only: video visible/transparent/click-through, upright + correct physical L/R
+  (both set 90/left; flip in GNOME if swapped/upside-down), 775 start/loop behaviour, Google search
+  results + first-time reCAPTCHA human-solve. Watch error.log MESA dri_gbm Permission denied (AppArmor
+  userns on GPU loader; not blocking since 0 drops).
