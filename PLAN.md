@@ -233,3 +233,11 @@ reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag
   (both set 90/left; flip in GNOME if swapped/upside-down), 775 start/loop behaviour, Google search
   results + first-time reCAPTCHA human-solve. Watch error.log MESA dri_gbm Permission denied (AppArmor
   userns on GPU loader; not blocking since 0 drops).
+
+### 2026-11-06 16:53 CET (15:53Z) -- Claude Opus 4.8 (studio) -- user on-site acceptance
+- User confirmed on-site that the piece is normal ("目前都正常") after the reboot: display
+  orientation, playback and visuals all look correct at inspection. Combined with the remote
+  evidence (doctor PASS, portrait persisted, 8080 up, 0 dropped frames), r10 rc3 is deployed and
+  running on hcw-MS-7D17. This is a point-in-time on-site confirmation, NOT a long-duration soak,
+  not a full reCAPTCHA-over-time result, and not a stable release (lintian/license/vuln/soak gates
+  still open). Flip: deployment+autoplay DONE; soak + reCAPTCHA-in-practice + release gates remain.
