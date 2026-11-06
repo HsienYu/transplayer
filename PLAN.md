@@ -4,14 +4,45 @@ Workflow: Hybrid (Section 7, hardware/real-time video) + Deployment (Section 14)
 Production change (Section 24). The performance fix is gated on the artist's visual
 acceptance because every real option alters the artwork's video pipeline.
 
-Formal host: `hcw@100.84.243.117` (Tailscale) — Ubuntu 26.04.1 LTS, GNOME 50.1,
-Celeron G3930 (2 cores), 15 GiB RAM, RTX 4060 / NVIDIA 595.99.02. Two ASUS VP247
-1920x1080 panels (DP-2 serial G9L..., HDMI-1 serial H3L...).
+Formal host (NEW, 2026-11-06): `hcw@100.72.17.111` (Tailscale), hostname `hcw-MS-7D17` —
+Ubuntu 26.04.1 LTS (resolute), kernel 7.0.0, GNOME Shell 50.1, Wayland. MSI MS-7D17 board,
+12 threads, 14 GiB RAM, NVIDIA RTX 4060 (AD107) / driver 595.99.02. Display panels not yet
+verified on this host. This REPLACES the retired 2-core Celeron `hcw@100.84.243.117`.
 
-Branch: `fix/r10-linux-optional-dependencies` (pushed to origin). Master stays clean
-at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
+Branch: `HsienYu/transplayer-deploy` = `fix/r10-linux-optional-dependencies` (7b4257f) +
+reCAPTCHA flag (d97eb95) + rc3 bump (f0da1dc). Master stays clean; no stable tag/promotion
+(release gates below are not all passed).
 
-## Status
+## Status — new host hcw-MS-7D17 (rc3), 2026-11-06
+
+- [done] Port the r8/r7b reCAPTCHA flag `--disable-blink-features=AutomationControlled`
+  to the LIVE chrome-first path (`chrome-session.js`, not the unused Selenium `controller.js`).
+  TDD red->green; full suite 134/134 on studio (Node 26.7.0). Commit d97eb95.
+- [done] Bump `release.json` to `1.1.0~rc3` (rc2 payload + the flag). Commit f0da1dc.
+- [done] Build `transplayer_1.1.0~rc3_amd64.deb` (290,272,932 B, SHA-256
+  af2cbb4ba82c13ec482e7aad8c2f284125d0f44e8ef3929fd64b69b6a5177ef0): staged on studio from
+  SHA-pinned toolchains (Electron 45.1.0, CfT/ChromeDriver 156.0.8078.80, nopecha 0.6.1
+  intermediate, Node 24.22.2 / PM2 7.1.1), `dpkg-deb --root-owner-group --build` on the host.
+  Bundle manifest SHA 3bad0b0e..., tools manifest SHA 2c279cf5.... Flag confirmed in the
+  staged chrome-session.js; nopecha stripped from the final payload.
+- [done] On-host preflight (read-only, clean baseline): Ubuntu 26.04.1 amd64, no prior
+  transplayer/`/opt/transplayer`, dpkg --audit clean, 8080 free, apt simulate
+  **0 upgraded, 10 newly installed, 0 to remove**. Deb + .sha256 + INSTALL.txt staged at
+  `~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/` on the host.
+- [todo] OPERATOR (sudo): `sudo apt-get install --no-remove --no-upgrade ./transplayer_1.1.0~rc3_amd64.deb`
+  — require the 0/10/0 plan; stop on any upgrade/removal. sudo is password-gated; not runnable
+  from here. See the host INSTALL.txt.
+- [todo] ON-SITE (desktop, needs eyes): `transplayer setup` (video path), GNOME portrait
+  rotation per display + `transplayer screens` UP/LEFT/RIGHT, `enable-extension` + logout/login,
+  `configure --autostart`, visual playback/transparency, then reboot-autoplay.
+- [todo] reCAPTCHA: human-solve once per scene profile (user decision 2026-11-06); confirm
+  /sorry/ clears after the first cycle. Flag alone does not remove abuse gating.
+- [todo] RE-MEASURE dropped frames on this i5/RTX-4060 host BEFORE any packed-alpha work — the
+  38% loss was a 2-core Celeron software-decode bottleneck; stronger CPU may make it moot.
+- [todo] Warning-bar: operator to report the exact bar text if any (``--test-type`` deliberately
+  NOT added — it re-introduces an automation signal).
+
+## Status (prior — retired Celeron host, history)
 
 - [done] Diagnose the dropped-frames root cause with primary evidence (VP9 + `alpha_mode=1`;
   Chromium 156 refuses HW decode for alpha unless HEVC; libvpx software decode on a 2-core
@@ -154,3 +185,20 @@ at `ab8bf5d`; no stable tag/promotion (release gates below are not all passed).
   cadence / Programmable Search API / paid nopecha); (3) redo display portrait rotation +
   persistence on the new machine; (4) install nvidia-vaapi-driver there if the packed-alpha HW
   decode path is still wanted. Memory updated: shared/transplayer-formal-host.md marked RETIRED.
+
+### 2026-11-06 15:39 CET (14:39Z) -- Claude Opus 4.8 (studio, new host hcw-MS-7D17 deploy)
+- State: New formal host hcw@100.72.17.111 (hcw-MS-7D17, Ubuntu 26.04.1, RTX 4060, 12t/14GiB)
+  is the replacement for the retired Celeron. Ported the r8 AutomationControlled reCAPTCHA flag
+  to the live chrome-first path + TDD (134/134). Bumped to rc3. Built and staged
+  transplayer_1.1.0~rc3_amd64.deb (SHA af2cbb4b...) on the host at
+  ~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/ with INSTALL.txt. Preflight clean,
+  apt simulate 0/10/0. Branch HsienYu/transplayer-deploy pushed.
+- Decisions: reCAPTCHA = human-solve-once per scene profile (user chose 2026-11-06); flag is
+  defense-in-depth, not a /sorry/ fix. Did NOT add --test-type (re-adds automation signal).
+  Maintainer = chenghsienyu <chenghsienyu@aim.com> (git author; RC field build, not a stable
+  release). Build-staged on studio (no dpkg-deb on Arch) then dpkg-deb on the Ubuntu host.
+- Next steps: operator runs the sudo apt install (0/10/0), then on-site setup/rotation/
+  extension/autostart/visual verify + reboot-autoplay; re-measure dropped frames on this
+  stronger host before any packed-alpha work; report the warning-bar text if one shows.
+- Open questions: exact display panels on the new host (not verified); whether to merge this
+  branch to fix/r10 / master (user's call); lintian/license/vuln release gates still open.
