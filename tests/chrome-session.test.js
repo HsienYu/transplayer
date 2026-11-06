@@ -84,6 +84,41 @@ test("replacement Chrome suppresses restore UI while reusing the dedicated profi
 });
 
 
+test("chrome-first loads the CAPTCHA solver extension when its directory is resolved", async () => {
+  const f = fixture();
+  f.deps.captchaExtension = () => "/opt/transplayer/releases/r10.AppDir/app/nopecha";
+  const session = new (load().ChromeSession)(f.options, f.deps);
+  try {
+    await session.start();
+    const args = f.calls.find(c => c[0] === "spawn")[2];
+    assert.equal(args.filter(a =>
+      a === "--load-extension=/opt/transplayer/releases/r10.AppDir/app/nopecha").length, 1);
+  } finally { await session.close(); }
+});
+
+test("chrome-first omits the solver when no extension directory is resolved", async () => {
+  const f = fixture();
+  f.deps.captchaExtension = () => null;
+  const session = new (load().ChromeSession)(f.options, f.deps);
+  try {
+    await session.start();
+    const args = f.calls.find(c => c[0] === "spawn")[2];
+    assert(!args.some(a => a.startsWith("--load-extension")));
+  } finally { await session.close(); }
+});
+
+test("captchaExtensionDir honours the disable flag and requires the directory", () => {
+  const { captchaExtensionDir } = load();
+  const os = require("node:os"), fsp = require("node:fs"), p = require("node:path");
+  const base = fsp.mkdtempSync(p.join(os.tmpdir(), "cs-ext-"));
+  try {
+    assert.equal(captchaExtensionDir(base, {}), null); // no nopecha subdir
+    fsp.mkdirSync(p.join(base, "nopecha"));
+    assert.equal(captchaExtensionDir(base, {}), p.join(base, "nopecha"));
+    assert.equal(captchaExtensionDir(base, { TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION: "1" }), null);
+  } finally { fsp.rmSync(base, { recursive: true, force: true }); }
+});
+
 for (const replacement of [false, true]) {
   test(`${replacement ? "replacement" : "initial"} Chrome suppresses noninteractive infobars without bypassing site security`, async () => {
     if (replacement) {

@@ -64,6 +64,15 @@ interactive confirmations, and the AutomationControlled flag (ported from r8/r7b
 only reduces the automation signal — it does not remove Google abuse-gating.
 Red output is retained in `evidence/r10-infobars-red.log`. Real browser UI
 acceptance remains required.
+rc4 adds two reCAPTCHA-handling checks. `controller.test.js` verifies
+`goTo` retries once when `getCurrentUrl()` lands on `/sorry/` (sorry-then-clean
+→ `get` x2; clean → x1; sorry-twice → exactly x2), covering the soft
+per-request abuse interstitial. `chrome-session.test.js` verifies the
+chrome-first launch adds `--load-extension=<app/nopecha>` when the unpacked
+solver is present and omits it under `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1`,
+and unit-tests `captchaExtensionDir` (flag + directory-exists gating). CfT 156
+was observed to raise no developer-mode warning bubble under `--disable-infobars`;
+end-to-end solve completion is environment-dependent and not asserted.
 `installer_cases.py` adds direction-only pattern planning from logical
 geometry, independent rotation metadata, reversed enumeration/negative
 origins, malformed/mirrored/gapped/offset layout rejection, fixed settings

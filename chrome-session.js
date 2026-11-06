@@ -239,12 +239,25 @@ function bounded(promise, milliseconds, label) {
     timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
   })]).finally(() => clearTimeout(timer));
 }
+// Resolve the unpacked NopeCHA solver to load into the chrome-first launch (r8/r7b parity,
+// re-authorised by the artist 2026-11-06). Returns the directory only when it is actually
+// shipped in the payload and the operator has not set TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1
+// (the same env lever the webdriver path honours — instant rollback without reinstalling).
+// Loaded as an unpacked extension via --load-extension; verified on CfT 156 to raise no
+// developer-mode warning bubble under --disable-infobars.
+function captchaExtensionDir(baseDir, env) {
+  if (env && env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION === "1") return null;
+  const dir = path.join(baseDir, "nopecha");
+  try { if (fs.statSync(dir).isDirectory()) return dir; } catch (_) { /* not shipped */ }
+  return null;
+}
 
 class ChromeSession {
   constructor(options, dependencies = {}) {
     this.options = { timeoutMs: 10000, pollMs: 100, ...options };
     this.deps = {
       now: Date.now, sleep, spawn, prepareProfile, allocatePort, inspectEndpoint,
+      captchaExtension: () => captchaExtensionDir(__dirname, process.env),
       readVersion, closeBrowser, waitExit, portReleased: port => sockets(port).length === 0,
       createService: driverPath => {
         const { ServiceBuilder } = require("selenium-webdriver/chrome");
@@ -285,15 +298,25 @@ class ChromeSession {
       if (!Number.isSafeInteger(this.port) || this.port <= 1024 || this.port > 65535)
         throw new Error("Invalid allocated debugger port");
       this.checkStopped();
-      this.child = this.deps.spawn(this.options.chromePath, [
+      const launchArgs = [
         "--ozone-platform=x11", "--disable-setuid-sandbox",
         "--no-first-run", "--no-default-browser-check", "--password-store=basic",
         "--hide-crash-restore-bubble", "--disable-infobars",
         "--disable-blink-features=AutomationControlled",
         "--user-data-dir=" + this.options.profileDir,
         "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=" + this.port,
-        "--new-window", "about:blank",
-      ], { env: this.options.env || process.env, stdio: ["ignore", "pipe", "pipe"] });
+      ];
+      const extensionDir = this.deps.captchaExtension();
+      if (typeof extensionDir === "string" && path.isAbsolute(extensionDir) &&
+          !/[\0\r\n]/.test(extensionDir)) {
+        launchArgs.push("--load-extension=" + extensionDir);
+        console.log("captcha-extension loaded " + extensionDir);
+      } else {
+        console.log("captcha-extension disabled");
+      }
+      launchArgs.push("--new-window", "about:blank");
+      this.child = this.deps.spawn(this.options.chromePath, launchArgs,
+        { env: this.options.env || process.env, stdio: ["ignore", "pipe", "pipe"] });
       this.child.once("error", error => { this.spawnError = error; });
       // Do not copy arbitrary Chromium stderr (including debugger URLs) into artwork logs.
       this.child.stdout.resume();
@@ -374,4 +397,4 @@ class ChromeSession {
   }
 }
 
-module.exports = { ChromeSession, validateDebugger, inspectEndpoint };
+module.exports = { ChromeSession, validateDebugger, inspectEndpoint, captchaExtensionDir };

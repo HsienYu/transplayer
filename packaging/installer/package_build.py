@@ -98,7 +98,9 @@ def stage(bundle, tools, output, bundle_digest, tools_digest, maintainer=None):
     output.mkdir(parents=True)
     app = output / RELEASE["appdir"].lstrip("/")
     shutil.copytree(bundle, app)
-    # Solver is unused by chrome-first and is not distributed in the r10 RC.
+    # The packed solver zip served only the legacy webdriver path (not live in r10); drop it.
+    # The chrome-first launch loads the UNPACKED app/nopecha/ via --load-extension, which is
+    # kept. Solver re-authorised by the artist 2026-11-06; its license is the artist's call.
     (app / "app/nopecha-0.6.1.zip").unlink(missing_ok=True)
     # Do not bundle a GNOME49 extension inside the new application tree.
     if (app / "gnome49").exists():

@@ -79,8 +79,11 @@ python3 packaging/build-portable.py \
 
 瀏覽器 archive 按既有介面命名為 `chrome.zip`、`chromedriver.zip`、
 `nopecha-0.6.1-chromium.zip`；三者都由既有 builder 校驗。
-NopeCHA 是此**中間組裝步驟**的歷史輸入，r10 的最終 staging 會移除它，
-chrome-first 不載入 solver。日後去除中間下載需求應另行修改／測試 portable builder。
+NopeCHA 由 builder 解壓為未封裝的 `app/nopecha/`，chrome-first 於啟動時以
+`--load-extension` 載入（rc4 起，藝術家 2026-11-06 授權重新納入；授權責任在藝術家）。
+最終 staging 只移除打包用的 `nopecha-0.6.1.zip`（僅舊 webdriver 路徑使用），保留未封裝目錄。
+operator 可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用 solver（免重裝）。
+CfT 156 實測：`--load-extension` 在 `--disable-infobars` 下不會出現開發人員模式警示 bubble。
 
 在另一個乾淨 supervisor 輸入目錄複製 `packaging/supervisor/package*.json` 後：
 

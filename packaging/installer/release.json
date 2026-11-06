@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc3",
+  "version": "1.1.0~rc4",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc3 adds the chrome-first AutomationControlled flag; awaiting Ubuntu 26.04 hardware verification"
+  "status": "RC — rc4 adds /sorry/ detect-and-retry in controller.goTo and re-adds the unpacked NopeCHA solver to the chrome-first launch (artist-authorised 2026-11-06); release gates still open"
 }

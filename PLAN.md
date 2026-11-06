@@ -67,25 +67,37 @@ cookie/session flagging and not a hard IP block. Therefore: cookie removal is NO
 license reason (`package_build.py:102` strips `nopecha-0.6.1.zip`), and chrome-first was chosen
 to minimise automation signal (`navigator.webdriver=false`, normal UA), accepting no solver.
 
-- [todo] (1) `controller.js` goTo: after `driver.get(url)`, if `getCurrentUrl()` contains
-  `/sorry/`, log a structured `sorry-retry` line, wait `SORRY_RETRY_MS` (4000), `get(url)` once.
-  One retry, no loop. TDD in `tests/controller.test.js` (fake driver): sorry-then-clean -> get x2
-  + sleep; clean-first -> get x1, no sleep; sorry-twice -> get exactly x2. Red first.
-- [todo] (2) NopeCHA empirical check on STUDIO before shipping: unpack nopecha 0.6.1 + spawn
-  chrome-for-testing 156 with the exact chrome-session.js arg list + `--load-extension=<dir>`;
-  check (a) no developer-mode warning bubble under `--disable-infobars` (the 警示-bar goal;
-  `--test-type` is OFF-LIMITS), (b) extension actually loads (`chrome://extensions` via
-  `/json/list`), (c) NopeCHA 0.6.1 free tier still auto-solves `recaptcha/api2/demo`.
-- [todo] (2) Decision gate: clean+loads+solves -> wire into `chrome-session.js` behind an env
-  flag (mirror `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION`), make `package_build.py:102` strip
-  conditional, unpack to `app/nopecha/` at build time (no runtime unzip), ship in rc4. If it
-  bubbles or does not solve -> report to user; retry ships alone as rc4, NopeCHA gets rc5 or is
-  dropped. Do NOT spend a day on Secure-Preferences HMAC / ExtensionInstallForcelist.
-- [todo] Bump `release.json` to `1.1.0~rc4`; build (studio stage -> host dpkg-deb, same split as
-  rc3); install on host. ROLLBACK = rc3 deb still at `~/.cache/transplayer-builds/r10-rc3-*/`.
-- [todo] Live verify (DoD #7): poll `/json/list` through one full timeline cycle, count `/sorry/`
-  sightings before/after; grep out.log for `sorry-retry` lines and confirm the follow-up nav
-  landed clean. Timestamps from `date`.
+- [done] (1) `controller.js` goTo: after `driver.get(url)`, if `getCurrentUrl()` contains
+  `/sorry/`, log `CAPTCHA sorry-retry id=.. url=..`, wait `SORRY_RETRY_MS` (4000), `get(url)` once.
+  One retry, no loop. TDD in `tests/controller.test.js`: sorry-then-clean -> get x2; clean -> x1;
+  sorry-twice -> exactly x2. Red confirmed then green. Commit 8102b4a.
+- [done] (2) NopeCHA empirical check on STUDIO (DISPLAY=:99/own Xvfb, zero exhibition risk):
+  fetched + SHA-verified CfT 156 (b711c720..) and nopecha 0.6.1 (cfbbe7b3..); spawned chrome with
+  the EXACT chrome-session.js arg list + `--load-extension`. RESULTS: (a) `--load-extension`
+  honored in CfT 156 — NopeCHA service worker `dknlfmjaanfblgfdfebhijalfmhmjjjo` runs; (b) NO
+  developer-mode warning bubble / infobar in 5 screenshots under `--disable-infobars` (clean
+  toolbar + viewport at both 1600x1000 and 1200x800) — same CfT binary the exhibition runs, so
+  equivalent; (c) NopeCHA actively SOLVES key-lessly (challenge advanced 3x3 -> 4x4 with no input,
+  no API-key wall) BUT produced no token in ~110s — the flagged headful test env loops challenges
+  endlessly (reCAPTCHA hell, a worst case even a human fails). Completion is environment-limited,
+  NOT a solver failure. Screenshots in scratchpad: shot-early/late/popup, bubble-t3/t15.
+- [done] (2) Decision gate GREEN (loads clean, no bubble, attempts key-lessly). Wired into
+  `chrome-session.js` via `captchaExtensionDir(__dirname, env)` + `--load-extension`, gated by
+  `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION` (instant operator rollback). `build-portable.py` unpacks
+  the zip to `app/nopecha/` (path-traversal guarded); `package_build.py` still strips the packed
+  zip (webdriver path dead) and keeps the unpacked dir. TDD: 3 chrome-session tests red->green +
+  installer staging test asserts dir survives / zip stripped. Full suite 140/140 Node + 52 Python.
+- [todo] Build `transplayer_1.1.0~rc4_amd64.deb` (studio stage -> host dpkg-deb, same split as
+  rc3); install on host. ROLLBACK = rc3 deb at `~/.cache/transplayer-builds/r10-rc3-20261106T143240Z/`,
+  OR set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` in the operator env to drop just the solver.
+- [todo] Live verify (DoD #7): confirm out.log says `captcha-extension loaded .../app/nopecha`;
+  poll `/json/list` through one full timeline cycle, count `/sorry/` sightings before/after; grep
+  out.log for `CAPTCHA sorry-retry` lines and confirm the follow-up nav landed clean. Timestamps
+  from `date`.
+- [todo] WATCH (not blockers): NopeCHA holds `chrome.debugger`; chromedriver attaches at browser
+  level. r7b ran this combo for years, but if `executeScript` starts throwing "another debugger is
+  attached" after rc4, set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` (faster than reinstalling rc3).
+  The two extra component SWs (`nkeimhog..`, `glbjnf..`) are CfT built-ins, not ours.
 
 ## Status (prior — retired Celeron host, history)
 

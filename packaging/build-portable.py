@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import zipfile
 import zlib
 import tempfile
 from browser_bundle import prepare_browser
@@ -69,6 +70,18 @@ for relative, metadata in lock["packages"].items():
 (app / "bin/chrome").mkdir(parents=True)
 shutil.copy2(str(driver), str(app / "bin/chrome/chromedriver"))
 shutil.copy2(str(extension), str(app / "nopecha-0.6.1.zip"))
+# Unpack the solver for the live chrome-first launch, which loads it via --load-extension
+# (the legacy webdriver path keeps using the packed zip through Selenium addExtensions).
+# Re-authorised by the artist 2026-11-06; SHA-pinned trusted artifact from browser-toolchain.json.
+nopecha_dir = app / "nopecha"
+with zipfile.ZipFile(str(extension)) as archive:
+    for member in archive.namelist():
+        target = (nopecha_dir / member).resolve()
+        if not str(target).startswith(str(nopecha_dir.resolve())):
+            raise ValueError("Unsafe path in solver archive")
+    archive.extractall(str(nopecha_dir))
+if not (nopecha_dir / "manifest.json").is_file():
+    raise ValueError("Solver archive missing manifest.json")
 browser_stage.cleanup()
 for name in ["AppRun", "transplayer.desktop", "transplayer.svg"]:
     shutil.copy2(str(source / "packaging" / name), str(output / name))

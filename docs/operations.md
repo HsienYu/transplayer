@@ -88,6 +88,10 @@ chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`、`--d
 不會消除 Google 的 /sorry/ 流量濫用判定），
 不使用 `--restore-last-session`、不偽造正常退出，
 也不刪除專用 profile、session 檔或 SingletonLock。
+rc4 起另以 `--load-extension=<app/nopecha>` 載入 NopeCHA solver（藝術家 2026-11-06 授權），
+可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。另外 `controller.goTo` 在導向後若
+落在 `/sorry/` 會記錄 `CAPTCHA sorry-retry` 並等待 `SORRY_RETRY_MS`（4 秒）重載一次；
+/sorry/ 為單次軟性判定，換頁即自行消失，故重載即可恢復。
 GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併
 Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求；不修改退出狀態、
 私人 profile 或憑證／Safe Browsing 設定。實際瀏覽器 UI 仍須另驗。

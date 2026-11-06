@@ -639,7 +639,8 @@ class BundleTests(unittest.TestCase):
             tools.mkdir()
             for name in ["AppRun", "runtime/electron", "browser/chrome",
                          "app/bin/chrome/chromedriver", "app/web-process-new.js",
-                         "app/nopecha-0.6.1.zip", "gnome49/metadata.json"]:
+                         "app/nopecha-0.6.1.zip", "app/nopecha/manifest.json",
+                         "gnome49/metadata.json"]:
                 file = bundle / name
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_bytes(b"synthetic")
@@ -668,6 +669,8 @@ class BundleTests(unittest.TestCase):
             self.assertIn("26.04", receipt["baseline"])
             self.assertEqual((app / "app/web-process-new.js").read_bytes(), b"synthetic")
             self.assertFalse((app / "app/nopecha-0.6.1.zip").exists())
+            # The unpacked solver ships for the chrome-first --load-extension launch.
+            self.assertTrue((app / "app/nopecha/manifest.json").is_file())
             build.verify_tree(app)
             ext = output / "usr/share/gnome-shell/extensions/transplayer-desktop@transplayer.local"
             self.assertEqual(json.loads((ext / "metadata.json").read_text())["shell-version"], ["50"])
