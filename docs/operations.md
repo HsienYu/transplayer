@@ -83,7 +83,9 @@ Esc／關閉任一視窗會一起清理，120 秒後自動關閉。
 不能把 GTK 的請求回傳當成視窗正確定位。真正 GNOME50／Xwayland 行為仍待實測。
 測試結束只回報已關閉，不把人工方向／左右確認寫成自動驗收成功。
 
-chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`，
+chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`、`--disable-infobars`
+與 `--disable-blink-features=AutomationControlled`（後者自 r8/r7b 移植，只降低自動化特徵，
+不會消除 Google 的 /sorry/ 流量濫用判定），
 不使用 `--restore-last-session`、不偽造正常退出，
 也不刪除專用 profile、session 檔或 SingletonLock。
 GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併

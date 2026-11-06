@@ -56,11 +56,14 @@ one wrapper running **48 Python tests (OK)**. Complete output:
 `evidence/r10-display-lifecycle-green.log`.
 `chrome-session.test.js` adds initial/replacement launch checks for
 `--hide-crash-restore-bubble` without restoring old tabs.
-It also checks `--disable-infobars` on both launches without adding
-certificate, web-security or full/GPU-sandbox bypass switches. Chromium156
-supports this switch in Chrome for Testing for buttonless information bars;
-it does not dismiss interactive confirmations. Red output is retained in
-`evidence/r10-infobars-red.log`. Real browser UI acceptance remains required.
+It also checks `--disable-infobars` and `--disable-blink-features=AutomationControlled`
+on both launches without adding certificate, web-security or full/GPU-sandbox
+bypass switches. Chromium156 supports these switches in Chrome for Testing;
+`--disable-infobars` targets buttonless information bars and does not dismiss
+interactive confirmations, and the AutomationControlled flag (ported from r8/r7b)
+only reduces the automation signal — it does not remove Google abuse-gating.
+Red output is retained in `evidence/r10-infobars-red.log`. Real browser UI
+acceptance remains required.
 `installer_cases.py` adds direction-only pattern planning from logical
 geometry, independent rotation metadata, reversed enumeration/negative
 origins, malformed/mirrored/gapped/offset layout rejection, fixed settings
