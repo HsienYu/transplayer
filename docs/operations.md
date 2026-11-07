@@ -89,7 +89,18 @@ chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`、`--d
 不使用 `--restore-last-session`、不偽造正常退出，
 也不刪除專用 profile、session 檔或 SingletonLock。
 rc4 起另以 `--load-extension=<app/nopecha>` 載入 NopeCHA solver（藝術家 2026-11-06 授權），
-可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。
+可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。**rc8 起由 `runtime.py` 的播放器環境
+預設帶入該旗標**：NopeCHA 解不了本作品遇到的 Enterprise reCAPTCHA（改由快照快取處理），而
+`--load-extension` 會在畫面上多出 NopeCHA bar 以及 Chrome 的「開發者模式擴充功能」警示 bar，
+故預設不載入；要重新啟用需改 `runtime.py` 的 env.update。
+
+**rc8 全螢幕背景視窗（視窗 13）**：視窗 13 是鋪滿整個桌面的背景，一建立就設為全螢幕
+（`web-process-new.js` 的 `bg_rect`，task 65 與 task 775 皆用它），其餘搜尋視窗 14–19 疊在上面。
+一般 Chrome 視窗的外框尺寸**含 GTK CSD 隱形陰影**（`_GTK_FRAME_EXTENTS` 實測 22,22,19,25），
+因此直接用 `{0,0,2160,1920}` 會讓可見內容縮進一圈、四周露出桌面底色；`bg_rect` 以
+`{-22,-19,2204,1964}` 外擴補償，讓可見內容貼齊 2160×1920 四邊。此外需桌面 dock 不佔用畫面空間
+（`gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false`，留存於 dconf、重開機後仍有效）
+讓 `_NET_WORKAREA` 為完整 `0,0,2160,1920`，視窗才能貼到最左邊。此設定不在 .deb 內，新機需另外執行一次。
 
 **rc5/rc6 快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA
 Enterprise，NopeCHA 解不了）會頻繁出現且常常連重載也被擋。`controller` 在乾淨結果捲動後會透過

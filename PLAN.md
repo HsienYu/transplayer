@@ -455,3 +455,38 @@ Validated before building:
   blocked (one-time empty-password step for the operator).
 - Open questions: real-world freshness cadence (snapshots are same-day only if re-seeded/captured
   that day); whether to harden the ~40% capture transport-failure rate (retry covers it for now).
+
+### 2026-11-07 20:38 CET -- Claude Code (Opus 4.8)
+- State: rc8 built, deployed and live-verified on hcw-MS-7D17. Two artist-requested fixes:
+  (1) Window 13 is now a persistent FULL-SCREEN BACKGROUND that fills the whole 2160x1920 desktop
+  edge-to-edge. Root cause of the earlier purple margin: a normal Chrome window's outer size
+  INCLUDES the GTK CSD invisible shadow (_GTK_FRAME_EXTENTS measured 22,22,19,25), so {0,0,2160,1920}
+  left the visible content inset. Fix: `bg_rect = {-22,-19,2204,1964}` oversizes+offsets by the shadow
+  (web-process-new.js, used at task 65 AND task 775; the WM honors the negative offset via setRect).
+  (2) Disabled the NopeCHA extension by default (runtime.py env.update adds
+  TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1), dropping the on-screen NopeCHA bar AND Chrome's
+  "developer mode extensions" warning bar (NopeCHA can't solve the Enterprise reCAPTCHA; snapshot
+  cache handles gating). Also: desktop dock no longer reserves space
+  (`gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false`, dconf-persistent) so
+  _NET_WORKAREA is the full 0,0,2160,1920 and windows reach the left edge.
+  rc8 deb SHA256 = 5a919d05a08bc6b31770f5d02067a2ed2a6e320eef0680a9b79632c18884a0a5 (built on hcw at
+  ~/.cache/transplayer-builds/r10-rc8-20261107T192715Z/). Live verify: version 1.1.0~rc8, window 13
+  wmctrl -44,-38 2204x1964 (visible fills 2160x1920), no --load-extension on any chrome, log
+  "captcha-extension disabled", snapshots 13/13, 150/150 node tests pass.
+- Decisions: Built rc8 by reusing the known-good rc7 stage/ tree (swap web-process-new.js +
+  runtime.py + release.json, refresh the one web-process-new.js SHA256SUMS line + DEBIAN/control
+  version), not the full studio->host pipeline -- lowest-risk minimal diff from rc7; nothing verifies
+  SHA256SUMS at install/runtime (proven by the live in-place patches running fine). Chose setRect
+  shadow-compensation over app-mode/fullscreen (both clamp a window to a single 1080 monitor, which
+  breaks every cross-seam window) and over maximize (raises above sub-windows). The dock setting is
+  NOT in the .deb -- a fresh museum install must run it once (documented in user-guide.md +
+  operations.md).
+- Next steps: finishing the artist's requested wrap-up -- GitHub release v1.1.0-rc8 (deb asset
+  rsync'ing to studio in background over the slow ~43KB/s tailscale link, ~2h; attach when it lands),
+  merge HsienYu/transplayer-deploy -> master, remove this worktree. The earlier reCAPTCHA/snapshot
+  work (rc7) is unchanged and still live. Consider: fold the dock gsetting into `configure` so new
+  installs get it automatically; package the manual snapshot-seed CLI.
+- Open questions: window 13 recreation mid-loop (crash) would momentarily revert it to default size
+  until the next task 65/775 -- not observed in clean automated runs, deferred (a controller-creation
+  safeguard would fix it but risks raising a recreated 13 above active subs). PLAN.md is ~40KB, over
+  the 30KB archive threshold -- archive finished pre-rc8 sections next resume.
