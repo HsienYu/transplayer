@@ -2,11 +2,11 @@
 
 ## Scope / 適用範圍
 
-本文件適用 Ubuntu **26.04 LTS amd64／GNOME 50 r10 RC**，尚未實機驗收。
+本文件適用 Ubuntu **26.04 LTS amd64／GNOME 50**；目前部署版本為 `1.1.0~rc8`，
+已在參考展場機實機驗證，發行前稽核閘門（soak／授權／漏洞／lintian）仍開放。
 安裝來源與發行限制見[開發指南](development.md)；
 一般設定見[使用者指南](user-guide.md)。
-**不要對正在運行的 Ubuntu 25.10 r9 現場套用以下命令。**
-舊現場仍依[既有 runbook](../tests/manual/ubuntu25-r8.md)維護。
+**不要對正在運行的舊 Ubuntu 25.10／r9 現場套用以下命令；本文件只適用 Ubuntu 26.04。**
 
 ## Paths and ownership / 路徑與權限
 
@@ -200,4 +200,3 @@ dpkg 不是整個作品的原子切換；完成回退演練之前不能作正式
 驗證活動閘門並保全原套件、extension、設定與捷徑；
 遷移／回復需另有已核准程序，不能靠刪除衝突檔來「乾淨安裝」。
 Ubuntu 25.10 已 EOL，這不是允許自動升級正在播放的現場之理由。
-歷史限制及完整舊 README 保留於[歷史快照](history/ubuntu25-r9-readme.md)。

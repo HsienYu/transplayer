@@ -2,8 +2,10 @@
 
 ## Scope and architecture / 範圍與架構
 
-Ubuntu 26.04 r10 是**待實機驗證的 RC 原始碼**，不是已發布 `.deb`。
-日常使用從[使用者指南](user-guide.md)開始；本文件給開發／發行人員。
+Ubuntu 26.04 r10 的 `1.1.0~rc8` 已發布於
+[GitHub Release v1.1.0-rc8](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc8)
+並在參考展場機實機驗證；但仍屬 **RC**——發行前授權／漏洞／lintian／長時間 soak
+稽核尚未全部完成。日常使用從[使用者指南](user-guide.md)開始；本文件給開發／發行人員。
 
 - `main.js`、`app/`：透明影片、時間回報及正常停止。
 - `web-process-new.js`、`controller.js`、`chrome-session.js`：原始時間軸、
