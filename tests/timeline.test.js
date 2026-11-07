@@ -77,7 +77,7 @@ test("all event times, rectangles, scrolling and browser lifecycles remain uncha
   const t = timeline();
   const expected = {
     10: [["goTo", 14], ["setBrowserRect", 14, { x: 500, y: 180, width: 1620, height: 1620 }], ["scrollTo", 14, 9000]],
-    65: [["breakScroll", 13], ["goTo", 13], ["scrollTo", 13, 9000]],
+    65: [["breakScroll", 13], ["goTo", 13], ["setBrowserRect", 13, { x: -22, y: -19, width: 2204, height: 1964 }], ["scrollTo", 13, 9000]],
     85: [["breakScroll", 14], ["closeBrowser", 14]],
     120: [["goTo", 15], ["setBrowserRect", 15, { x: 500, y: 100, width: 1620, height: 1620 }], ["scrollTo", 15, 9000]],
     140: [["breakScroll", 13], ["goTo", 13], ["scrollTo", 13, 9000]],
@@ -94,7 +94,7 @@ test("all event times, rectangles, scrolling and browser lifecycles remain uncha
     580: [["goTo", 19], ["setBrowserRect", 19, { x: 30, y: 300, width: 2100, height: 1600 }], ["scrollTo", 19, 9000]],
     610: [["breakScroll", 13], ["goTo", 13], ["scrollTo", 13, 12000]],
     640: [["breakScroll", 19], ["closeBrowser", 19]],
-    775: [["goTo", 13], ["setBrowserRect", 13, { x: 0, y: 0, width: 2160, height: 1920 }], ["scrollTo", 13, 9000]],
+    775: [["goTo", 13], ["setBrowserRect", 13, { x: -22, y: -19, width: 2204, height: 1964 }], ["scrollTo", 13, 9000]],
   };
   assert.deepEqual(Object.keys(t.task), Object.keys(expected));
   for (const second of Object.keys(expected)) {

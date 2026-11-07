@@ -245,6 +245,11 @@ def play(home):
             "TRANSPLAYER_PROFILE_DIR": str(home / ".local/share/transplayer/profiles-r10-basic"),
             "TRANSPLAYER_DESKTOP_BACKEND": "gnome49",
             "TRANSPLAYER_BROWSER_BACKEND": "chrome-first",
+            # NopeCHA cannot solve the Enterprise reCAPTCHA this piece hits; the
+            # snapshot cache handles gating instead. Loading the unpacked extension
+            # only added an on-screen NopeCHA bar plus Chrome's "developer mode
+            # extensions" warning bar, so keep it off.
+            "TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION": "1",
         })
         os.execve(APP / "runtime/electron", [str(APP / "runtime/electron"), str(APP / "app"),
             "--ozone-platform=x11", "--enable-transparent-visuals", "--disable-setuid-sandbox"], env)

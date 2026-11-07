@@ -14,6 +14,19 @@ let controller = new Controller();
 
 let display_width = 2160;
 let display_height = 1920;
+// Window 13 is the full-screen background. A normal Chrome window's outer size
+// INCLUDES the GTK client-side-decoration invisible shadow (measured
+// _GTK_FRAME_EXTENTS = 22,22,19,25 on this GNOME 50 / Chrome-for-Testing), so a
+// plain {0,0,2160,1920} rect leaves the visible content inset — a purple desktop
+// margin around it. Oversize + offset by the shadow so the VISIBLE content fills
+// the whole 2160x1920 desktop edge-to-edge. Left/right shadow = 22+22 = 44,
+// top/bottom shadow = 19+25 = 44.
+let bg_rect = {
+  x: -22,
+  y: -19,
+  width: display_width + 44,
+  height: display_height + 44,
+};
 let page_flag = 0;
 //remove all focus function for linux platform
 let task = {
@@ -39,6 +52,13 @@ let task = {
         13,
         "https://www.google.com/search?q=map%20of%20melaka%20fort&tbm=isch"
       );
+      // Window 13 is the persistent full-screen background: size it to the whole
+      // desktop the moment it first appears, so it fills from here to the end
+      // (14-19 are created later and stack above it). Only sized at creation,
+      // not on later goTo(13) navigations, so it is never re-raised over an
+      // active sub-window. bg_rect compensates for the GTK shadow so the visible
+      // content reaches every edge (no desktop margin).
+      await controller.setBrowserRect(13, bg_rect);
       controller.scrollTo(13, 9000);
     },
   },
@@ -212,12 +232,7 @@ let task = {
           13,
           "https://www.google.com/search?q=world%20news&tbm=isch&tbs=qdr:d"
         );
-        await controller.setBrowserRect(13, {
-          x: 0,
-          y: 0,
-          width: display_width,
-          height: display_height,
-        });
+        await controller.setBrowserRect(13, bg_rect);
         controller.SCROLL_GAP = 1;
         controller.SCROLL_INTERVAL = 10;
         controller.scrollTo(13, 9000);
