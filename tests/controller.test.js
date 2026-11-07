@@ -262,7 +262,7 @@ test("goTo falls back to the rc4 retry when /sorry/ and no snapshot exists", asy
   assert.deepEqual(f.calls.get, [url, url]); // retried same url, did not serve a file://
 });
 
-test("scrollTo capture caches a clean page once (first-clean-wins)", async () => {
+test("maybeCapture refreshes a clean page at most once per run", async () => {
   const f = snapFixture();
   const url = "https://www.google.com/search?q=cap&tbm=isch";
   let captures = 0;
@@ -271,9 +271,36 @@ test("scrollTo capture caches a clean page once (first-clean-wins)", async () =>
   await f.controller.maybeCapture(15);
   assert.equal(captures, 1);
   assert(fsReal.existsSync(f.controller.snapshotPath(url)));
-  f.controller.browsers[15].captureUrl = url; // ask again
+  f.controller.browsers[15].captureUrl = url; // ask again this run
   await f.controller.maybeCapture(15);
-  assert.equal(captures, 1); // already cached -> no second capture
+  assert.equal(captures, 1); // already refreshed this run -> no second capture
+});
+
+test("maybeCapture overwrites a persisted snapshot on the run's first clean sighting (refresh)", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=stale&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "OLD".repeat(40000)); // a persisted snapshot from a prior run
+  f.controller.browsers[15] = { captureUrl: url,
+    session: { captureSnapshot: async () => "NEW".repeat(80000) } };
+  await f.controller.maybeCapture(15);
+  assert.match(fsReal.readFileSync(snap, "utf8"), /^NEW/); // refreshed, not first-clean-wins
+});
+
+test("maybeCapture retries once when the first capture fails transiently", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=flaky&tbm=isch";
+  let attempts = 0;
+  f.controller.browsers[15] = { captureUrl: url,
+    session: { captureSnapshot: async () => {
+      attempts++;
+      if (attempts === 1) throw new Error("transport failed");
+      return "M".repeat(200000);
+    } } };
+  await f.controller.maybeCapture(15);
+  assert.equal(attempts, 2);
+  assert(fsReal.existsSync(f.controller.snapshotPath(url)));
 });
 
 test("maybeCapture does not capture a gated page", async () => {
@@ -285,14 +312,14 @@ test("maybeCapture does not capture a gated page", async () => {
   assert.equal(captures, 0);
 });
 
-test("constructing the controller clears stale snapshots for a same-day cache", () => {
+test("constructing the controller persists existing snapshots across reboots", () => {
   const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
   const snaps = path.join(dir, "snapshots");
   fsReal.mkdirSync(snaps, { recursive: true });
-  fsReal.writeFileSync(path.join(snaps, "stale.mhtml"), "old");
+  fsReal.writeFileSync(path.join(snaps, "kept.mhtml"), "prior-run");
   const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
   new Controller();
-  assert(!fsReal.existsSync(path.join(snaps, "stale.mhtml")));
+  assert(fsReal.existsSync(path.join(snaps, "kept.mhtml"))); // survives a reboot
 });
 
 test("every controller operation used by the live timeline remains available", () => {

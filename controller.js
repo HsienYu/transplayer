@@ -45,9 +45,13 @@ class Controller {
     /** @type {boolean} default is true */
     this.useLocalProfile = true;
 
-    // Same-day snapshot cache: the exhibition reboots daily and the first cycles after boot are
-    // un-gated, so clean results are captured then and served when Google later serves /sorry/.
-    // Clear on construct (once per process = once per daily boot) so the cache is always same-day.
+    // Snapshot cache: clean image-results pages are captured and served when Google later serves
+    // /sorry/ so the displays never show a CAPTCHA. The cache PERSISTS across reboots (a flagged
+    // IP can gate the whole warm-up, leaving nothing to capture that day); each query is refreshed
+    // at most once per process run (first clean sighting) so it tracks the most recent real page
+    // without churn, and a prior day's capture keeps serving until a fresh one replaces it.
+    /** @type {Set<string>} queries already refreshed this run */
+    this.refreshedSnapshots = new Set();
     this.initSnapshots();
   }
 
@@ -67,10 +71,9 @@ class Controller {
   }
 
   initSnapshots() {
-    // Only clear when running with a configured profile (production). Never touch arbitrary paths
-    // in tests/CLIs that have no TRANSPLAYER_PROFILE_DIR.
+    // Persist the cache across reboots; just make sure the directory exists in production.
     if (!process.env.TRANSPLAYER_PROFILE_DIR) return;
-    try { fs.rmSync(this.snapshotRoot(), { recursive: true, force: true }); } catch (_) { /* best effort */ }
+    try { fs.mkdirSync(this.snapshotRoot(), { recursive: true, mode: 0o700 }); } catch (_) { /* best effort */ }
   }
 
   writeSnapshot(url, data) {
@@ -88,20 +91,30 @@ class Controller {
     }
   }
 
-  // Capture the current clean page of a window into the same-day cache (first-clean-wins).
+  // Capture the current clean page of a window, refreshing its cached snapshot once per run.
   async maybeCapture(id) {
     const entry = this.browsers[id];
     if (!entry || !entry.captureUrl || !entry.session ||
         typeof entry.session.captureSnapshot !== "function") return;
     const url = entry.captureUrl;
     entry.captureUrl = null; // one-shot per clean navigation
-    if (this.hasSnapshot(url)) return; // already cached today
-    try {
-      const mhtml = await entry.session.captureSnapshot();
-      if (this.writeSnapshot(url, mhtml))
-        console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length}`);
-    } catch (error) {
-      console.error("snapshot capture failed", error && error.message);
+    if (this.refreshedSnapshots.has(url)) return; // already refreshed this run
+    this.refreshedSnapshots.add(url);
+    // One capture can fail transiently (the driver is also using this page); retry once.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const mhtml = await entry.session.captureSnapshot();
+        if (this.writeSnapshot(url, mhtml)) {
+          console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length}`);
+          return;
+        }
+        console.error(`snapshot too small to cache url=${url}`);
+        return;
+      } catch (error) {
+        if (attempt === 0) { await sleep(500); continue; }
+        this.refreshedSnapshots.delete(url); // allow a later clean sighting to retry
+        console.error("snapshot capture failed", error && error.message);
+      }
     }
   }
 

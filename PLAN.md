@@ -122,6 +122,39 @@ to minimise automation signal (`navigator.webdriver=false`, normal UA), acceptin
   attached" after rc4, set `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` (faster than reinstalling rc3).
   The two extra component SWs (`nkeimhog..`, `glbjnf..`) are CfT built-ins, not ours.
 
+## Status — rc6 persist + refresh + capture-reliability (rc5 found two gaps), 2026-11-07
+
+rc5 deployed but the cache stayed empty and CAPTCHA still showed. Two findings on the live host:
+1. **Capture bug**: `ChromeSession.captureSnapshot` failed with `transport failed` on the real
+   (multi-MB) clean pages — NOT a size limit (electron-node captured a 7 MB page fine in isolation;
+   the failure is a transient when the driver is also using the page). rc6 retries the capture once.
+2. **Hot IP / no clean warm-up today**: after a mid-day reboot the IP was so flagged that ~93% of
+   searches gated even in the warm-up (only ~2 of ~30 clean), so same-day capture barely populated.
+   The clean warm-up premise held EARLIER today (first gate at line 5729/6238) and likely holds on a
+   fresh morning after overnight IP cooldown, but is not guaranteed.
+
+User decision (2026-11-07): **persist + refresh-on-clean + morning seed**. rc6 implements persist +
+refresh (NOT the seed yet):
+- [done] `controller`: cache PERSISTS across reboots (constructor no longer clears; just ensures the
+  dir). `refreshedSnapshots` Set → each query refreshed at most once per run (first clean sighting
+  overwrites the persisted file), so it tracks the most recent real page and a prior capture keeps
+  serving until replaced. `maybeCapture` retries once on a failed capture. TDD: persist / refresh-
+  once / overwrite / retry-once — 148/148 Node, 52 Python.
+- [todo] Build + install rc6 (reuse rc5-build inputs; only source changed); reboot; verify the
+  capture retry makes clean landings actually cache (`CAPTCHA cached-snapshot` + files appear) and
+  that `served-snapshot` then shows results on /sorry/.
+- [todo] `snapshot-seed` CLI (DEFERRED to rc7): run the 13 queries slowly once when the IP is coolest
+  to guarantee coverage. Keep it a MANUAL command (autostart persistence is blocked by the harness).
+- [done] KEYRING fix (side issue, 2026-11-07): user saw an OS keyring-unlock password dialog on
+  remote-connect. Cause: auto-login leaves the login keyring locked; something (remote session) hit
+  the Secret Service. Artwork Chrome is UNAFFECTED (`--password-store=basic`). Removed the locked
+  `login.keyring` (backed up to `~/.local/share/keyrings.bak-*`), set `default`→`login`; after
+  reboot the Secret Service collection is `locked=False` (no prompt). A persistent login-time
+  autostart to re-point `default`→session each boot was BLOCKED by the harness ("Unauthorized
+  Persistence") — so across reboots the prompt may recur on remote-connect until the user does the
+  one-time empty-password step (leave the "new keyring password" blank + Continue) or grants the
+  autostart. Not visitor-facing.
+
 ## Status — rc5 same-day snapshot cache (reCAPTCHA still visible on rc4), 2026-11-07
 
 User reported CAPTCHA STILL appears on rc4. Live diagnosis: gating is FREQUENT and is
