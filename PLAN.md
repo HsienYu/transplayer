@@ -140,9 +140,14 @@ refresh (NOT the seed yet):
   overwrites the persisted file), so it tracks the most recent real page and a prior capture keeps
   serving until replaced. `maybeCapture` retries once on a failed capture. TDD: persist / refresh-
   once / overwrite / retry-once — 148/148 Node, 52 Python.
-- [todo] Build + install rc6 (reuse rc5-build inputs; only source changed); reboot; verify the
-  capture retry makes clean landings actually cache (`CAPTCHA cached-snapshot` + files appear) and
-  that `served-snapshot` then shows results on /sorry/.
+- [done] Build + install rc6 (deb SHA 2c6bb3724df59ceb8c1df30dcbf675d4be8a82f8c24583c157c246bf805cc0c9,
+  `~/.cache/transplayer-builds/r10-rc6-20261107T001220Z/`); reboot-verified 2026-11-07. The capture
+  retry WORKS: out.log cached=12 (rc5 was 0), 6 unique queries cached (16–21 MB each, persisted at
+  profiles-r10-basic/snapshots/), served=3 — gated queries (elephant bone/in keddah/history
+  gunpowder) now load the cached real page via file:// instead of CAPTCHA. doctor 2/2, 8080 up.
+  WATCH: capture still fails ~19/31 (transport) but the retry + refresh-on-fail re-attempts each
+  query on its next clean sighting, so coverage fills over cycles/days; could harden the capture
+  transport later. Coverage was 6/13 at boot+5min on a hot IP; a cool morning fills faster.
 - [todo] `snapshot-seed` CLI (DEFERRED to rc7): run the 13 queries slowly once when the IP is coolest
   to guarantee coverage. Keep it a MANUAL command (autostart persistence is blocked by the harness).
 - [done] KEYRING fix (side issue, 2026-11-07): user saw an OS keyring-unlock password dialog on
@@ -404,3 +409,20 @@ Validated before building:
 - Open questions: real-world NopeCHA efficacy on the exhibition (low-signal, residential IP) vs the
   flagged studio test; whether to add `udm=2` rewrite to the hardcoded `tbm=isch` URLs (halves the
   redirects Google sees) in a later rc.
+
+### 2026-11-07 01:30 CET -- Claude Opus 4.8 (studio) -- rc5->rc6 snapshot cache working on hcw-MS-7D17
+- State: reCAPTCHA no-longer-visible via same-day snapshot cache. rc5 shipped the mechanism but
+  (a) captureSnapshot failed silently ("transport failed" on multi-MB pages) and (b) a hot IP gated
+  the whole warm-up. rc6 fixes: PERSIST across reboots + refresh-once-per-run + capture retry.
+  Live-verified: 12 captures (rc5=0), 6 queries cached (persisted), 3 served (CAPTCHA replaced by
+  cached real results). MHTML fidelity proven offline (201/201 images). Commits 8102b4a (retry),
+  28dd5ce (NopeCHA), b6d809a (rc5 cache), e4c4048 (rc6 persist). Branch pushed through df55d12;
+  rc5/rc6 commits local — push before handoff.
+- Decisions: cookie-removal and engine-switch rejected (evidence). NopeCHA can't solve reCAPTCHA
+  Enterprise. Cache PERSISTS (user decision) because a flagged IP can gate the whole warm-up.
+  snapshot-seed CLI deferred (manual only; autostart blocked by harness "Unauthorized Persistence").
+- Next steps: push rc5/rc6 commits; let coverage fill over cycles/a cool morning; optionally harden
+  the capture transport (19/31 still fail, retried on next clean sighting); add the manual
+  snapshot-seed CLI; HOLD the GitHub release until coverage + a cool-morning run are confirmed.
+- Open questions: does a cool-morning reboot reach near-full 13/13 coverage (unverified — IP hot all
+  day today). Keyring: persistent auto-unlock blocked; user to do the one-time empty-password step.
