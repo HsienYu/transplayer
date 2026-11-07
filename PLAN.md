@@ -148,8 +148,18 @@ refresh (NOT the seed yet):
   WATCH: capture still fails ~19/31 (transport) but the retry + refresh-on-fail re-attempts each
   query on its next clean sighting, so coverage fills over cycles/days; could harden the capture
   transport later. Coverage was 6/13 at boot+5min on a hot IP; a cool morning fills faster.
-- [todo] `snapshot-seed` CLI (DEFERRED to rc7): run the 13 queries slowly once when the IP is coolest
-  to guarantee coverage. Keep it a MANUAL command (autostart persistence is blocked by the harness).
+- [done] SEEDED full coverage 2026-11-07 (user idea: manual reCAPTCHA solve). Stopped the piece,
+  spawned one visible chrome-first window on the LEFT screen with a FRESH profile at the first query.
+  A fresh profile's first searches load CLEAN (no gate yet), so no manual solve was even needed — a
+  one-off seed script drove all 13 queries and captured 11 before the fresh profile got flagged
+  (incl. the worst gaters history-and-ethnography-museum / gunpowder-explosion); a second fresh
+  profile captured the last one (Telecom tower). Cache is keyed by QUERY and SHARED across all
+  windows, so 13 captures cover every window. **13/13 cached**, piece restarted, verified SERVING:
+  served-snapshot fired 16x across 8 queries, current window shows a file:// snapshot (not /sorry/),
+  dropped:0. Seed script at (host) /tmp/seed.js; seed profiles cleaned up.
+- [todo] `snapshot-seed` CLI (DEFERRED to rc7): package the one-off /tmp/seed.js as a MANUAL
+  `transplayer snapshot-seed` (fresh profile, sequential capture; two passes cover all 13) so the
+  museum can re-seed on demand. Autostart persistence is blocked by the harness, so keep it manual.
 - [done] KEYRING fix (side issue, 2026-11-07): user saw an OS keyring-unlock password dialog on
   remote-connect. Cause: auto-login leaves the login keyring locked; something (remote session) hit
   the Secret Service. Artwork Chrome is UNAFFECTED (`--password-store=basic`). Removed the locked
