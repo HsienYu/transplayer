@@ -3,6 +3,16 @@ Status: **GPU rc2 installed and payload verified; full-workload performance bloc
 Target: Ubuntu 26.04 LTS amd64, GNOME 50 / Ubuntu Dock, two portrait
 1080×1920 displays. Existing Ubuntu 25.10 r9 exhibition is out of scope.
 
+> Current state (2026-11-07 UTC): the authoritative version is now
+> `1.1.0~rc8` — see `packaging/installer/release.json`. rc8 was built,
+> installed and live-verified on the reference host MSI MS-7D17 (version
+> `1.1.0~rc8`, reboot autoplay, 0 dropped frames).
+> The dated runbook entries below record earlier `1.1.0~rc1`/`~rc2`
+> candidates and are kept verbatim as the chronological evidence log —
+> do not read their SHA-256/version values as the current package. Full
+> Ubuntu 26.04 acceptance gates (soak, licence/vulnerability/lintian
+> audit) remain open; rc8 deployment is not the completed acceptance run.
+
 ## Before testing
 Use a disposable new test installation with the user's maintenance approval.
 Keep the installer, checksum, full logs and previous package for recovery.

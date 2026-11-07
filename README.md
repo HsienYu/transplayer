@@ -29,7 +29,10 @@ Ubuntu 25.10 已停止支援，請勿因此自行升級正在播放的現場。
 
 請先閱讀[安裝與操作手冊](docs/user-guide.md)：給新手的逐步流程，涵蓋準備影片與螢幕、
 核對並安裝 `.deb`、影片檔案位置、首次設定、開始／停止、自啟、更新與移除。
-向專案取得 `transplayer_1.1.0~rc8_amd64.deb`，安裝前先核對其 SHA-256；
+自 [GitHub Release v1.1.0-rc8](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc8)
+下載 `transplayer_1.1.0.rc8_amd64.deb`（GitHub 會把版本號的 `~` 顯示成 `.`，套件內版本仍是
+`1.1.0~rc8`），或向專案索取同一檔案；安裝前先核對其 SHA-256
+（`5a919d05a08bc6b31770f5d02067a2ed2a6e320eef0680a9b79632c18884a0a5`，Release 頁亦有列）。
 不要把 clone 原始碼或 staging tree 當成安裝包。
 
 設定工具不自動登出／重開、修改 GDM／螢幕配置或索取密碼。

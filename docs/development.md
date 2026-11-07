@@ -16,7 +16,7 @@ Ubuntu 26.04 r10 是**待實機驗證的 RC 原始碼**，不是已發布 `.deb`
   GTK3 延遲載入。顯示器探針在獨立子程序的主執行緒初始化 GDK，
   設定視窗不在背景執行緒操作 GTK。
 - `packaging/installer/release.json`：r10 路徑、版本、桌面 revision 及 supervisor 版本契約。
-  Debian 版本 `1.1.0~rc2` 不會自動改寫作品原本 `package.json` 的歷史應用版本。
+  Debian 版本 `1.1.0~rc8` 不會自動改寫作品原本 `package.json` 的歷史應用版本。
 
 GPU 候選版保留 Electron 預設加速，不再由 `main.js` 全域停用；
 未強制影片硬解、忽略 GPU blocklist 或停用 GPU sandbox。
@@ -126,7 +126,7 @@ python3 packaging/build-deb.py \
 環境變數為發行人員事先取得的 provenance 值，不是秘密或應用程式 runtime 設定。
 此命令只產生 **staging tree，不是可安裝套件**。
 在 Ubuntu 26.04 amd64 建置機上，使用全新的 stage 路徑，
-同一命令加上 `--build /absolute/path/transplayer_1.1.0~rc2_amd64.deb`，
+同一命令加上 `--build /absolute/path/transplayer_1.1.0~rc8_amd64.deb`，
 才會呼叫 `dpkg-deb --root-owner-group --build` 並輸出 SHA-256 sidecar。
 本階段尚未執行真正 Linux 建置。
 
