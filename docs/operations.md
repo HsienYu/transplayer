@@ -103,6 +103,10 @@ CDP `Page.captureSnapshot` 把整頁存成 MHTML（`<TRANSPLAYER_PROFILE_DIR>/sn
 為 `flags=(unconfined){userns}`，故 `file://` 讀取不受限。
 注意：被標記很重的 IP 連熱機都被擋時，當天可能抓不到新頁，會服務前一次（仍是真實結果，非 CAPTCHA）；
 建議每日展場休息讓 IP 冷卻，或日後加 `snapshot-seed` 於 IP 最冷時慢速預抓 13 個查詢。
+**rc7 起以「頁面內容」判斷被擋（非只看 /sorry/ URL）**：Google 也會把 reCAPTCHA 直接嵌在 /search
+頁上（路徑仍是 /search），所以 `isGated` 會檢查 reCAPTCHA iframe 或頁面文字含「unusual traffic」/
+「not a robot」。這用於「被擋就改放快取」以及「不把 CAPTCHA 頁存進快取」兩處，避免把灰色 reCAPTCHA
+遮罩頁當成乾淨結果快取下來（rc5/rc6 曾因此把 starlink 的 reCAPTCHA 頁存成快照，畫面出現灰色遮罩）。
 GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併
 Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求；不修改退出狀態、
 私人 profile 或憑證／Safe Browsing 設定。實際瀏覽器 UI 仍須另驗。

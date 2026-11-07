@@ -312,6 +312,39 @@ test("maybeCapture does not capture a gated page", async () => {
   assert.equal(captures, 0);
 });
 
+test("goTo serves cache when the page shows an inline reCAPTCHA (content-gated, not /sorry/)", async () => {
+  const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
+  const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
+  const controller = new Controller();
+  controller.SORRY_RETRY_MS = 0;
+  const url = "https://www.google.com/search?q=starlink&tbm=isch";
+  const snap = controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  const calls = { get: [] };
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return "https://www.google.com/search?q=starlink&udm=2#ip=1"; }, // not /sorry/
+    async executeScript() { return true; }, // page body is an "unusual traffic" reCAPTCHA
+  };
+  controller.getWebDriver = async () => driver;
+  assert.equal(await controller.goTo(14, url), true);
+  assert.deepEqual(calls.get, [url, "file://" + snap]); // served cache despite the /search URL
+});
+
+test("maybeCapture refuses to cache a content-gated (inline reCAPTCHA) page", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=starlink&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[15] = { captureUrl: url,
+    driver: { async getCurrentUrl() { return "https://www.google.com/search?q=starlink&udm=2"; },
+      async executeScript() { return true; } },
+    session: { captureSnapshot: async () => { captures++; return "M".repeat(200000); } } };
+  await f.controller.maybeCapture(15);
+  assert.equal(captures, 0); // gated page -> never cached
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
 test("constructing the controller persists existing snapshots across reboots", () => {
   const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
   const snaps = path.join(dir, "snapshots");

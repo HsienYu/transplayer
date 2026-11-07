@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc6",
+  "version": "1.1.0~rc7",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc6 makes the snapshot cache PERSIST across reboots and refresh once per run (a flagged IP can gate the whole warm-up, so same-day-only clearing could leave nothing to serve), and retries a transiently failed capture; clean pages are still served as MHTML via file:// whenever Google returns /sorry/ so the displays never show a CAPTCHA; retry + NopeCHA retained; release gates still open"
+  "status": "RC — rc7 detects Google's abuse gate by page CONTENT (reCAPTCHA iframe / 'unusual traffic' text), not just the /sorry/ URL, because Google also serves the reCAPTCHA inline on /search; so the piece serves the cached snapshot on inline reCAPTCHA too and never caches a CAPTCHA page. Snapshot cache persists + refreshes; release gates still open"
 }

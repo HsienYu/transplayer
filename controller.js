@@ -38,6 +38,15 @@ class Controller {
   // Smallest MHTML worth caching; a real image-results page is several MB, a block/error page is tiny.
   SNAPSHOT_MIN_BYTES = 100 * 1024;
 
+  // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
+  static GATE_CHECK_JS = "(function(){try{" +
+    "if(location.pathname.indexOf('/sorry')===0)return true;" +
+    "if(document.querySelector('iframe[src*=\"recaptcha\"]'))return true;" +
+    "var t=(document.body&&document.body.innerText)||'';" +
+    "if(t.indexOf('unusual traffic')>=0)return true;" +
+    "if(t.indexOf('not a robot')>=0)return true;" +
+    "return false;}catch(e){return false;}})()";
+
   constructor() {
     /** @type {Object.<number, {driver: WebDriver|null, scrollState: number, pid: number}>} */
     this.browsers = {};
@@ -99,6 +108,8 @@ class Controller {
     const url = entry.captureUrl;
     entry.captureUrl = null; // one-shot per clean navigation
     if (this.refreshedSnapshots.has(url)) return; // already refreshed this run
+    // Never cache a gated/CAPTCHA page (Google can serve the reCAPTCHA inline on /search).
+    if (entry.driver && await this.isGated(entry.driver)) return;
     this.refreshedSnapshots.add(url);
     // One capture can fail transiently (the driver is also using this page); retry once.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -120,6 +131,17 @@ class Controller {
 
   _markCapture(id, url) { if (this.browsers[id]) this.browsers[id].captureUrl = url; }
   _clearCapture(id) { if (this.browsers[id]) this.browsers[id].captureUrl = null; }
+
+  // True when the page is a Google abuse gate, by URL OR page content. Google serves the
+  // "unusual traffic" reCAPTCHA both at /sorry/ AND inline on the /search path, so a URL-only
+  // check misses the inline form and would cache or display a CAPTCHA page.
+  async isGated(driver) {
+    try {
+      const landed = await driver.getCurrentUrl();
+      if (typeof landed === "string" && landed.includes("/sorry/")) return true;
+      return !!(await driver.executeScript("return " + Controller.GATE_CHECK_JS));
+    } catch (_) { return false; }
+  }
 
   async getPageHeight(id) {
     let driver = await this.getWebDriver(id);
@@ -519,9 +541,8 @@ class Controller {
       // }//
 
       await driver.get(theUrl);
-      let landed = await driver.getCurrentUrl();
-      if (typeof landed === "string" && landed.includes("/sorry/")) {
-        // Prefer a same-day cached snapshot over ever showing the CAPTCHA page.
+      if (await this.isGated(driver)) {
+        // Prefer a cached snapshot over ever showing the CAPTCHA page.
         if (this.hasSnapshot(theUrl)) {
           console.log(`CAPTCHA served-snapshot id=${theId} url=${theUrl}`);
           await driver.get("file://" + this.snapshotPath(theUrl));
@@ -532,8 +553,7 @@ class Controller {
         console.log(`CAPTCHA sorry-retry id=${theId} url=${theUrl}`);
         await sleep(this.SORRY_RETRY_MS);
         await driver.get(theUrl);
-        landed = await driver.getCurrentUrl();
-        if (typeof landed === "string" && landed.includes("/sorry/")) this._clearCapture(theId);
+        if (await this.isGated(driver)) this._clearCapture(theId);
         else this._markCapture(theId, theUrl);
       } else {
         this._markCapture(theId, theUrl);
