@@ -20,11 +20,9 @@ Ubuntu 26.04 r10 的 `1.1.0~rc8` 已發布於
 - `packaging/installer/release.json`：r10 路徑、版本、桌面 revision 及 supervisor 版本契約。
   Debian 版本 `1.1.0~rc8` 不會自動改寫作品原本 `package.json` 的歷史應用版本。
 
-GPU 候選版保留 Electron 預設加速，不再由 `main.js` 全域停用；
-未強制影片硬解、忽略 GPU blocklist 或停用 GPU sandbox。
-正式機獨立 A/B 掉格率 11.56%→1.62%，兩輪仍為 Vpx 軟體解碼。
-操作者已確認該探針的透明、無黑底／閃爍與穿透；完整作品、音訊、
-瀏覽器 UI、生命週期及 soak 仍須以新版安裝後驗證。
+GPU 合成已啟用（`main.js` 不再全域停用 Electron 加速，未強制影片硬解、
+未忽略 GPU blocklist、未停用 GPU sandbox）；影片解碼仍在 CPU，
+原因與硬體需求見[效能分析](performance.md)。
 專用 Chrome profile 同時關閉翻譯／儲存密碼等提示與預設權限詢問；
 不修改私人 profile、不略過憑證或 Safe Browsing。
 
@@ -81,11 +79,11 @@ python3 packaging/build-portable.py \
 
 瀏覽器 archive 按既有介面命名為 `chrome.zip`、`chromedriver.zip`、
 `nopecha-0.6.1-chromium.zip`；三者都由既有 builder 校驗。
-NopeCHA 由 builder 解壓為未封裝的 `app/nopecha/`，chrome-first 於啟動時以
-`--load-extension` 載入（rc4 起，藝術家 2026-11-06 授權重新納入；授權責任在藝術家）。
-最終 staging 只移除打包用的 `nopecha-0.6.1.zip`（僅舊 webdriver 路徑使用），保留未封裝目錄。
-operator 可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用 solver（免重裝）。
-CfT 156 實測：`--load-extension` 在 `--disable-infobars` 下不會出現開發人員模式警示 bubble。
+NopeCHA 由 builder 解壓為未封裝的 `app/nopecha/`，但**預設不載入**：`runtime.py` 的
+播放器環境帶入 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1`，chrome-first 不加
+`--load-extension`（NopeCHA 解不了本作品遇到的 Enterprise reCAPTCHA，改由快照快取處理）；
+要重新啟用需改 `runtime.py`。最終 staging 只移除打包用的 `nopecha-0.6.1.zip`
+（僅舊 webdriver 路徑使用），保留未封裝目錄。
 
 在另一個乾淨 supervisor 輸入目錄複製 `packaging/supervisor/package*.json` 後：
 
@@ -145,8 +143,8 @@ python3 packaging/build-deb.py \
    Chrome for Testing 散布條件、ChromeDriver、Node、PM2 AGPL-3.0 與所有相依。
    自動產生 notices **不等於法律／授權審查已通過**。
 3. 評估保留依賴的已知弱點；既有 Selenium／OSC 相依鏈有警告，
-   歷史 GitHub push 曾回報 20 項（12 high／6 moderate／2 low），
-   這不是此次完整或最新弱點掃描，不宣稱已修復。
+   GitHub 於 2026-11-07 回報 19 項（12 high／5 moderate／2 low），
+   這不是完整或最新弱點掃描，也不宣稱已修復。
 4. 執行完整[實機驗收](../tests/manual/ubuntu26-installation.md)，含重登／重開、
    長時間監測、升級／移除／失敗回復。舊 r9 現場測試不可代用。
 5. 另取得使用者同意後才 commit、push、tag 或建立實際 Release。
@@ -155,4 +153,5 @@ python3 packaging/build-deb.py \
 官方參考：[GDK3 init_check](https://docs.gtk.org/gdk3/func.init_check.html)、
 [PyGObject threading](https://pygobject.gnome.org/guide/threading.html)、
 [GNOME 50 porting](https://gjs.guide/extensions/upgrading/gnome-shell-50.html)、
-[Debian maintainer scripts](https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html)。
+[Debian maintainer scripts](https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html)、
+[Chromium 156 HasPendingUncleanExit](https://github.com/chromium/chromium/blob/156.0.8078.80/chrome/browser/ui/startup/startup_browser_creator.cc#L1598)（`--hide-crash-restore-bubble` 的判斷路徑）。

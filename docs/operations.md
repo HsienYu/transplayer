@@ -65,7 +65,7 @@ foreign／errored／舊登入授權狀態不會被自動刪除或接管。
 套件的 `session-launch.py` 在父程序釋放帳號互斥鎖後才繼續，
 並將全系統共用閘門跨 exec 保留到播放器結束；這仍需 Linux 實測 FD／PM2 行為。
 
-## Display confirmation and browser recovery / 方向確認與瀏覽器回復
+## Display confirmation / 方向與左右確認
 
 設定視窗可開啟 `gnome-control-center display`，由操作人員自行套用及保留設定；
 套件明確相依 `gnome-control-center`。每台可獨立旋轉 90°／270°，
@@ -83,49 +83,48 @@ Esc／關閉任一視窗會一起清理，120 秒後自動關閉。
 不能把 GTK 的請求回傳當成視窗正確定位。真正 GNOME50／Xwayland 行為仍待實測。
 測試結束只回報已關閉，不把人工方向／左右確認寫成自動驗收成功。
 
+## 瀏覽器與 CAPTCHA 處理 / Browser and CAPTCHA handling
+
 chrome-first 每次建立瀏覽器皆加入 `--hide-crash-restore-bubble`、`--disable-infobars`
-與 `--disable-blink-features=AutomationControlled`（後者自 r8/r7b 移植，只降低自動化特徵，
-不會消除 Google 的 /sorry/ 流量濫用判定），
-不使用 `--restore-last-session`、不偽造正常退出，
-也不刪除專用 profile、session 檔或 SingletonLock。
-rc4 起另以 `--load-extension=<app/nopecha>` 載入 NopeCHA solver（藝術家 2026-11-06 授權），
-可用 `TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1` 即時停用。**rc8 起由 `runtime.py` 的播放器環境
-預設帶入該旗標**：NopeCHA 解不了本作品遇到的 Enterprise reCAPTCHA（改由快照快取處理），而
-`--load-extension` 會在畫面上多出 NopeCHA bar 以及 Chrome 的「開發者模式擴充功能」警示 bar，
-故預設不載入；要重新啟用需改 `runtime.py` 的 env.update。
+與 `--disable-blink-features=AutomationControlled`（最後者只降低自動化特徵，不會消除
+Google 的 /sorry/ 流量濫用判定），不使用 `--restore-last-session`、不偽造正常退出，
+也不刪除專用 profile、session 檔或 SingletonLock。啟動前在已驗證且未鎖定的專用 profile
+安全合併 Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求，不修改退出狀態、私人 profile
+或憑證／Safe Browsing。
 
-**rc8 全螢幕背景視窗（視窗 13）**：視窗 13 是鋪滿整個桌面的背景，一建立就設為全螢幕
-（`web-process-new.js` 的 `bg_rect`，task 65 與 task 775 皆用它），其餘搜尋視窗 14–19 疊在上面。
-一般 Chrome 視窗的外框尺寸**含 GTK CSD 隱形陰影**（`_GTK_FRAME_EXTENTS` 實測 22,22,19,25），
-因此直接用 `{0,0,2160,1920}` 會讓可見內容縮進一圈、四周露出桌面底色；`bg_rect` 以
-`{-22,-19,2204,1964}` 外擴補償，讓可見內容貼齊 2160×1920 四邊。此外需桌面 dock 不佔用畫面空間
-（`gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false`，留存於 dconf、重開機後仍有效）
-讓 `_NET_WORKAREA` 為完整 `0,0,2160,1920`，視窗才能貼到最左邊。此設定不在 .deb 內，新機需另外執行一次。
+**NopeCHA 擴充功能預設不載入**：`runtime.py` 的播放器環境帶入
+`TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1`，chrome-first 不加 `--load-extension`
+（NopeCHA 解不了本作品遇到的 Enterprise reCAPTCHA，改由快照快取處理，且載入會在畫面上多出
+NopeCHA bar 與 Chrome 的「開發者模式擴充功能」警示 bar）；要重新啟用需改 `runtime.py`。
 
-**rc5/rc6 快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA
-Enterprise，NopeCHA 解不了）會頻繁出現且常常連重載也被擋。`controller` 在乾淨結果捲動後會透過
-CDP `Page.captureSnapshot` 把整頁存成 MHTML（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`）。
-之後任何一次 `goTo` 落在 `/sorry/` 時，若已有該查詢的快照就改以 `file://` 載入（log
-`CAPTCHA served-snapshot`），畫面永遠是搜尋結果而非 CAPTCHA；尚無快照時才退回 `CAPTCHA sorry-retry`
-（等 `SORRY_RETRY_MS` 4 秒重載一次）。擷取記錄為 `CAPTCHA cached-snapshot`。
-**rc6 起快取「持久化」**：不在開機時清空（被標記的 IP 可能整個熱機階段都被擋，若每日清空會沒東西
-可服務），改為「每次開機每個查詢最多刷新一次」（第一次看到乾淨頁就覆寫），因此永遠保留最近一次
-真實頁、有乾淨就更新。擷取偶發 `transport failed` 會自動重試一次。AppArmor chrome-first profile
-為 `flags=(unconfined){userns}`，故 `file://` 讀取不受限。
-注意：被標記很重的 IP 連熱機都被擋時，當天可能抓不到新頁，會服務前一次（仍是真實結果，非 CAPTCHA）；
-建議每日展場休息讓 IP 冷卻，或日後加 `snapshot-seed` 於 IP 最冷時慢速預抓 13 個查詢。
-**rc7 起以「頁面內容」判斷被擋（非只看 /sorry/ URL）**：Google 也會把 reCAPTCHA 直接嵌在 /search
-頁上（路徑仍是 /search），所以 `isGated` 會檢查 reCAPTCHA iframe 或頁面文字含「unusual traffic」/
-「not a robot」。這用於「被擋就改放快取」以及「不把 CAPTCHA 頁存進快取」兩處，避免把灰色 reCAPTCHA
-遮罩頁當成乾淨結果快取下來（rc5/rc6 曾因此把 starlink 的 reCAPTCHA 頁存成快照，畫面出現灰色遮罩）。
-GPU／dialogs 候選版會在專用 profile 已驗證且未鎖定時，於啟動前安全合併
-Preferences，關閉翻譯／密碼等提示並拒絕預設權限要求；不修改退出狀態、
-私人 profile 或憑證／Safe Browsing 設定。實際瀏覽器 UI 仍須另驗。
-Chrome156 的官方 [HasPendingUncleanExit](https://github.com/chromium/chromium/blob/156.0.8078.80/chrome/browser/ui/startup/startup_browser_creator.cc#L1598)
-確認此旗標的判斷路徑；單元測試只證明啟動參數及重建路徑，不證明瀏覽器 UI。
-發行時須以本版原始碼重建 portable 輸入，不能把舊 bundle 改名當成修正版。
-新機須以專用 profile 的受控異常退出與下次登入驗證無復原提示、圖片載入及持續捲動，
-不可只用網頁 DOM 或關閉提示後的畫面充當證據。
+**全螢幕背景視窗（視窗 13）**：視窗 13 是鋪滿整個桌面的背景，一建立就設為全螢幕
+（task 65 與 task 775 皆用它），其餘搜尋視窗 14–19 疊在上面。由於一般 Chrome 視窗外框尺寸
+含 GTK CSD 隱形陰影，程式已自動外擴補償，讓可見內容貼齊 2160×1920 四邊，**不需**也**不要**
+手動雙擊最大化（會把其他搜尋視窗壓到背後）。另需桌面 dock 不佔用畫面空間、讓 `_NET_WORKAREA`
+為完整 `0,0,2160,1920`，視窗才能貼到最左邊；此設定不在 .deb 內，新機安裝後須執行一次
+（留存於 dconf、重開機後仍有效）：
+
+```sh
+gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false
+```
+
+**快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA Enterprise）會頻繁
+出現且常連重載也被擋。`controller` 在乾淨結果捲動後透過 CDP `Page.captureSnapshot` 把整頁存成
+MHTML（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`，log `CAPTCHA cached-snapshot`）。
+之後任何一次 `goTo` 被判定為被擋時，若已有該查詢的快照就改以 `file://` 載入（log
+`CAPTCHA served-snapshot`），畫面永遠是搜尋結果而非 CAPTCHA；尚無快照時才退回
+`CAPTCHA sorry-retry`（等 `SORRY_RETRY_MS` 4 秒重載一次）。技術人員可用這幾個 log token 在
+`out.log` 追蹤。是否被擋以**頁面內容**判斷（`isGated` 檢查 reCAPTCHA iframe 或頁面文字含
+「unusual traffic」／「not a robot」），不只看 /sorry/ URL；同一判斷也用來**不把 CAPTCHA 頁
+存進快取**，避免把灰色遮罩頁當成乾淨結果。快取持久化、不在開機時清空；而是**每天開機時抓當日
+新快照**——機器每日重開機後、開機初期前幾輪搜尋多半乾淨，程式會把當日的新頁重新存進快取
+（每個查詢每次開機最多刷新一次，第一次看到乾淨頁就覆寫），所以之後服務的是**當天**的真實結果；
+若當天 IP 被擋到抓不到新頁，才退而服務最近一次成功抓到的頁（仍是真實結果，非 CAPTCHA）。
+因此務必維持「每天重開機一次」的運作習慣。AppArmor 的 chrome-first profile 為
+`flags=(unconfined){userns}`，故 `file://` 讀取不受限。
+
+若 IP 被標記很重、整個熱機階段都被擋，建議每日展場休息讓 IP 冷卻，
+或日後加 `snapshot-seed` 於 IP 最冷時慢速預抓 13 個查詢。
 
 ## Diagnostics / 診斷與隱私
 
