@@ -436,3 +436,22 @@ Validated before building:
   snapshot-seed CLI; HOLD the GitHub release until coverage + a cool-morning run are confirmed.
 - Open questions: does a cool-morning reboot reach near-full 13/13 coverage (unverified — IP hot all
   day today). Keyring: persistent auto-unlock blocked; user to do the one-time empty-password step.
+
+### 2026-11-07 02:05 CET -- Claude Opus 4.8 (studio) -- rc7 content-gating fixes the grey overlay; 13/13 clean coverage
+- State: artist saw a grey/transparent overlay. Root cause: the "starlink" SNAPSHOT was a captured
+  reCAPTCHA "unusual traffic" page (grey challenge backdrop baked in), served as if clean. Google
+  serves the reCAPTCHA inline on /search (not /sorry/), so the URL-only gating check cached it.
+  rc7 adds isGated(driver) = /sorry/ URL OR page CONTENT (reCAPTCHA iframe / "unusual traffic" /
+  "not a robot"), used in goTo (serve/retry on inline reCAPTCHA) and maybeCapture (never cache a
+  gated page). Deleted the bad starlink snapshot; re-seeded it clean (content-validated). 150/150
+  Node, 52 Python. rc7 deb SHA 7f3a2dff603edf33f2c778496a28c2360dad7637ec28c24f56346c8be73151d4,
+  installed + reboot-verified: 13/13 clean snapshots (0 bad), served=38, doctor 2/2, dropped:0.
+- Decisions: SEED is the fast way to full coverage (fresh profile, first searches clean; content
+  check rejects reCAPTCHA pages; 2nd fresh profile mops up stragglers). Cache keyed by query, shared
+  across windows, persists across reboots. Seed stays a MANUAL op (autostart blocked by harness).
+- Next steps: package the seed as a manual `transplayer snapshot-seed` CLI (currently ad-hoc host
+  /tmp/seedone.js + /tmp/seed.js); re-seed/refresh when the IP is cool for freshest same-day data;
+  HOLD the GitHub release until a cool-morning run + release gates. Keyring persistent fix still
+  blocked (one-time empty-password step for the operator).
+- Open questions: real-world freshness cadence (snapshots are same-day only if re-seeded/captured
+  that day); whether to harden the ~40% capture transport-failure rate (retry covers it for now).
