@@ -100,13 +100,19 @@ NopeCHA bar 與 Chrome 的「開發者模式擴充功能」警示 bar）；要�
 **全螢幕背景視窗（視窗 13）**：視窗 13 是鋪滿整個桌面的背景，一建立就設為全螢幕
 （task 65 與 task 775 皆用它），其餘搜尋視窗 14–19 疊在上面。由於一般 Chrome 視窗外框尺寸
 含 GTK CSD 隱形陰影，程式已自動外擴補償，讓可見內容貼齊 2160×1920 四邊，**不需**也**不要**
-手動雙擊最大化（會把其他搜尋視窗壓到背後）。另需桌面 dock 不佔用畫面空間、讓 `_NET_WORKAREA`
-為完整 `0,0,2160,1920`，視窗才能貼到最左邊；此設定不在 .deb 內，新機安裝後須執行一次
-（留存於 dconf、重開機後仍有效）：
+手動雙擊最大化（會把其他搜尋視窗壓到背後）。桌面 dock 另需兩項 dconf 設定（不在 .deb 內，新機
+安裝後各執行一次，留存於 dconf、重開機後仍有效）：
 
 ```sh
 gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false
+gsettings set org.gnome.shell.extensions.dash-to-dock intellihide false
 ```
+
+`dock-fixed false` 讓 dock 不佔畫面空間、`_NET_WORKAREA` 為完整 `0,0,2160,1920`，視窗才能貼到
+最左邊。`intellihide false` 把 dock 改為純自動隱藏並保持隱藏，避免它在桌面露出或焦點切換時彈出
+（`require-pressure-to-show` 預設 true，只有刻意頂邊才會出現）。**不要**改用「停用 Ubuntu Dock
+擴充功能」來隱藏——`desktop-modern-guard` 的桌面租約會 import 並操作 `dock._intellihide`，dock
+不在會丟 `Unsupported Ubuntu Dock API`；而關閉 intellihide 設定不影響此物件（dock 無條件建立它）。
 
 **快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA Enterprise）會頻繁
 出現且常連重載也被擋。`controller` 在乾淨結果捲動後透過 CDP `Page.captureSnapshot` 把整頁存成

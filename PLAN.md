@@ -30,9 +30,10 @@ This is still an **RC** — the stable-release gates below are not all passed.
 - [todo] `transplayer snapshot-seed` CLI: package the manual seed (fresh profile, two passes
   cover all 13 queries) so the museum can re-seed on demand. Autostart persistence is blocked
   by the harness, so it stays a manual op.
-- [todo] Consider folding the dock gsetting (`dash-to-dock dock-fixed false`) into
-  `configure` so a fresh install applies it automatically (currently a one-time manual step,
-  documented in user-guide.md + operations.md).
+- [todo] Consider folding the two dock gsettings (`dash-to-dock dock-fixed false` +
+  `intellihide false`) into `configure` so a fresh install applies them automatically
+  (currently a one-time manual step, documented in user-guide.md + operations.md). The dock
+  extension must stay enabled — the desktop guard operates `dock._intellihide`.
 - [todo] Keyring: auto-login leaves the login keyring locked and a persistent auto-unlock was
   blocked by the harness; the operator does the one-time empty-password step on remote-connect
   if the prompt recurs. Not visitor-facing.
