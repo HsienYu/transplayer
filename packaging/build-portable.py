@@ -51,7 +51,8 @@ app = output / "app"
 app.mkdir()
 for name in ["main.js", "portable.js", "desktop-state.js", "desktop-guard.js",
              "desktop-modern-guard.js", "desktop-client.js", "chrome-session.js", "controller.js",
-             "sub-process.js", "web-process-new.js", "package.json", "package-lock.json"]:
+             "sub-process.js", "web-process-new.js", "queries.js", "seeder.js", "seed.js",
+             "package.json", "package-lock.json"]:
     shutil.copy2(str(source / name), str(app / name))
 shutil.copytree(str(source / "app"), str(app / "app"))
 shutil.copytree(str(source / "packaging/gnome49"), str(output / "gnome49"))

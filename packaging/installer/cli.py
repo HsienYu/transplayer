@@ -15,7 +15,7 @@ def main():
     parser.add_argument("action", nargs="?", default="setup",
                         choices=["setup", "configure", "start", "stop", "status",
                                  "login", "play", "doctor", "detach", "enable-extension",
-                                 "prepare-maintenance", "screens"])
+                                 "prepare-maintenance", "screens", "snapshot-seed"])
     parser.add_argument("--video", type=Path)
     parser.add_argument("--autostart", action="store_true")
     parser.add_argument("--replace", action="store_true", help="Confirm changing an owned configuration")
@@ -51,6 +51,8 @@ def main():
         print("已送出啟用要求。若尚未載入，請自行登出再登入；不會自動登出。")
     elif args.action == "play":
         runtime.play(home)
+    elif args.action == "snapshot-seed":
+        runtime.seed(home)
     elif args.action == "doctor":
         report = {"release": RELEASE["release"], "status": RELEASE["status"]}
         for name, check in [("platform", runtime.platform_check),

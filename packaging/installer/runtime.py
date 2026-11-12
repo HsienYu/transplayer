@@ -255,6 +255,29 @@ def play(home):
             "--ozone-platform=x11", "--enable-transparent-visuals", "--disable-setuid-sandbox"], env)
 
 
+def seed(home):
+    """One-shot snapshot seed: capture a clean image-results page for every query into the
+    shared snapshot cache, rotating fresh Chrome profiles. Safe to run while the player is
+    live (uses its own seed-* profiles; TRANSPLAYER_SEED stops it wiping the display's)."""
+    if os.getuid() == 0:
+        raise SetupError("不可使用 root 執行快照 seed。")
+    env = session_env(home)
+    for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"):
+        if not env.get(k):
+            raise SetupError("快照 seed 需要圖形桌面授權；請由桌面執行。")
+    env.update({
+        "TRANSPLAYER_CHROME": str(APP / "browser/chrome"),
+        "TRANSPLAYER_DRIVER": str(APP / "app/bin/chrome/chromedriver"),
+        "TRANSPLAYER_PROFILE_DIR": str(home / ".local/share/transplayer/profiles-r10-basic"),
+        "TRANSPLAYER_DESKTOP_BACKEND": "gnome49",
+        "TRANSPLAYER_BROWSER_BACKEND": "chrome-first",
+        "TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION": "1",
+        "ELECTRON_RUN_AS_NODE": "1",
+    })
+    os.execve(APP / "runtime/electron",
+              [str(APP / "runtime/electron"), str(APP / "app/seed.js")], env)
+
+
 if __name__ == "__main__":
     try:
         if sys.argv[1:] != ["--display-probe"]:
