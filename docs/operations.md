@@ -120,12 +120,15 @@ MHTML（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`，log `CAPTCHA cach
 之後任何一次 `goTo` 被判定為被擋時，若已有該查詢的快照就改以 `file://` 載入（log
 `CAPTCHA served-snapshot`），畫面永遠是搜尋結果而非 CAPTCHA；尚無快照時才退回
 `CAPTCHA sorry-retry`（等 `SORRY_RETRY_MS` 4 秒重載一次）。技術人員可用這幾個 log token 在
-`out.log` 追蹤。是否被擋以**頁面內容**判斷（`isGated` 檢查 reCAPTCHA iframe 或頁面文字含
-「unusual traffic」／「not a robot」），不只看 /sorry/ URL；同一判斷也用來**不把 CAPTCHA 頁
-存進快取**，避免把灰色遮罩頁當成乾淨結果。快取持久化、不在開機時清空；而是**每天開機時抓當日
-新快照**——機器每日重開機後、開機初期前幾輪搜尋多半乾淨，程式會把當日的新頁重新存進快取
-（每個查詢每次開機最多刷新一次，第一次看到乾淨頁就覆寫），所以之後服務的是**當天**的真實結果；
-若當天 IP 被擋到抓不到新頁，才退而服務最近一次成功抓到的頁（仍是真實結果，非 CAPTCHA）。
+`out.log` 追蹤。**服務**端是否被擋以頁面內容判斷（`isGated`：/sorry/ URL、reCAPTCHA iframe 或
+頁面文字含「unusual traffic」／「not a robot」）。**存入快取**端（rc9 起）改用**正向判斷**
+（`isCleanResults`）：只有頁面有**足夠多張圖片結果**（`IMAGE_RESULT_MIN`，預設 25；真實結果頁
+有 200+ 張、灰頁／擋頁幾乎 0 張）才存；被擋、圖片太少或偵測出錯一律**不存**（fail-closed），
+所以灰色遮罩頁不會被當乾淨頁快取。快取持久化、不在開機時清空；而是**每天開機時抓當日新快照**：
+**rc9 起，每個 run 開始時 `controller` 會清掉 `se_*` 顯示 profile（保留 `snapshots/` 快取），
+改用全新 profile 拿 Google 新 session 的寬限期，讓開機 warm-up 能抓齊全部 13 個查詢**——不再因為
+長期被標記的 profile 永遠抓不到「硬查詢」而一直服務幾天前的舊快照。每個查詢每次 run 最多刷新一次
+（第一次看到乾淨頁就覆寫）；若當天真的抓不到，才退而服務最近一次成功抓到的頁（仍是真實結果，非 CAPTCHA）。
 因此務必維持「每天重開機一次」的運作習慣。AppArmor 的 chrome-first profile 為
 `flags=(unconfined){userns}`，故 `file://` 讀取不受限。
 

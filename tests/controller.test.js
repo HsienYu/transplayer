@@ -234,6 +234,19 @@ function snapFixture(currentUrls = [], profileDir) {
   return { controller, driver, calls, dir };
 }
 
+// A driver that answers the two capture-gate scripts: GATE_CHECK_JS -> `gated` (boolean),
+// CLEAN_CHECK_JS (contains img[src) -> `count` image thumbnails. `error` throws (fail-closed).
+function captureDriver({ count = 500, gated = false, error = false } = {}) {
+  return {
+    async getCurrentUrl() { return "https://www.google.com/search?q=x&udm=2#ip=1"; },
+    async executeScript(script) {
+      if (error) throw new Error("page gone");
+      if (String(script).includes("img[src")) return count;
+      return gated;
+    },
+  };
+}
+
 test("snapshotPath maps a query URL to a stable file under the profile snapshots dir", () => {
   const f = snapFixture();
   const q = "https://www.google.com/search?q=elephant&tbm=isch";
@@ -266,7 +279,7 @@ test("maybeCapture refreshes a clean page at most once per run", async () => {
   const f = snapFixture();
   const url = "https://www.google.com/search?q=cap&tbm=isch";
   let captures = 0;
-  f.controller.browsers[15] = { captureUrl: url,
+  f.controller.browsers[15] = { captureUrl: url, driver: captureDriver(),
     session: { captureSnapshot: async () => { captures++; return "M".repeat(200000); } } };
   await f.controller.maybeCapture(15);
   assert.equal(captures, 1);
@@ -282,7 +295,7 @@ test("maybeCapture overwrites a persisted snapshot on the run's first clean sigh
   const snap = f.controller.snapshotPath(url);
   fsReal.mkdirSync(path.dirname(snap), { recursive: true });
   fsReal.writeFileSync(snap, "OLD".repeat(40000)); // a persisted snapshot from a prior run
-  f.controller.browsers[15] = { captureUrl: url,
+  f.controller.browsers[15] = { captureUrl: url, driver: captureDriver(),
     session: { captureSnapshot: async () => "NEW".repeat(80000) } };
   await f.controller.maybeCapture(15);
   assert.match(fsReal.readFileSync(snap, "utf8"), /^NEW/); // refreshed, not first-clean-wins
@@ -292,7 +305,7 @@ test("maybeCapture retries once when the first capture fails transiently", async
   const f = snapFixture();
   const url = "https://www.google.com/search?q=flaky&tbm=isch";
   let attempts = 0;
-  f.controller.browsers[15] = { captureUrl: url,
+  f.controller.browsers[15] = { captureUrl: url, driver: captureDriver(),
     session: { captureSnapshot: async () => {
       attempts++;
       if (attempts === 1) throw new Error("transport failed");
@@ -310,6 +323,42 @@ test("maybeCapture does not capture a gated page", async () => {
     session: { captureSnapshot: async () => { captures++; return "x".repeat(200000); } } };
   await f.controller.maybeCapture(16);
   assert.equal(captures, 0);
+});
+
+test("maybeCapture refuses a grey / near-empty page (positive image-results gate)", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=grey&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[15] = { captureUrl: url, driver: captureDriver({ count: 3 }),
+    session: { captureSnapshot: async () => { captures++; return "M".repeat(200000); } } };
+  await f.controller.maybeCapture(15);
+  assert.equal(captures, 0); // too few image results -> not a real results page -> never cached
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
+test("maybeCapture fails closed when the clean-results check errors", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=err&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[15] = { captureUrl: url, driver: captureDriver({ error: true }),
+    session: { captureSnapshot: async () => { captures++; return "M".repeat(200000); } } };
+  await f.controller.maybeCapture(15);
+  assert.equal(captures, 0); // detection errored -> treat as not-clean -> do not cache
+});
+
+test("resetDisplayProfiles clears se_* display profiles each run but keeps the snapshot cache", () => {
+  const f = snapFixture();
+  const se13 = path.join(f.dir, "se_13"), se19 = path.join(f.dir, "se_19");
+  fsReal.mkdirSync(se13, { recursive: true });
+  fsReal.writeFileSync(path.join(se13, "Cookies"), "flagged");
+  fsReal.mkdirSync(se19, { recursive: true });
+  const keep = path.join(f.dir, "snapshots", "keep.mhtml");
+  fsReal.mkdirSync(path.dirname(keep), { recursive: true });
+  fsReal.writeFileSync(keep, "M".repeat(200000));
+  f.controller.resetDisplayProfiles();
+  assert(!fsReal.existsSync(se13));
+  assert(!fsReal.existsSync(se19));
+  assert(fsReal.existsSync(keep)); // persisted snapshot cache survives a fresh-profile run
 });
 
 test("goTo serves cache when the page shows an inline reCAPTCHA (content-gated, not /sorry/)", async () => {

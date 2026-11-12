@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc8",
+  "version": "1.1.0~rc9",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc8 makes window 13 a persistent full-screen background: sized the moment it appears (task 65) and oversized by the GTK CSD shadow (_GTK_FRAME_EXTENTS 22,22,19,25) so the VISIBLE content fills the whole 2160x1920 desktop edge-to-edge with no desktop margin; and disables the NopeCHA extension (TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION=1) to drop its on-screen bar plus Chrome's developer-mode-extensions warning bar (the snapshot cache handles gating). Requires the desktop dock to not reserve space (dash-to-dock dock-fixed=false) so windows reach the left edge. Snapshot cache persists + refreshes; release gates still open"
+  "status": "RC — rc9 hardens the snapshot cache against stale/grey content. (1) Fresh display profiles each run: the controller removes the persistent se_* chrome profiles at startup (keeping the snapshots/ cache) so every run starts in Google's new-session grace window and the post-boot warm-up captures today's clean page for all 13 queries, instead of a flagged long-lived profile that can never re-capture its 'hard' queries and keeps serving a days-old snapshot. (2) Positive capture gate: a page is cached only when it has >=25 image-result thumbnails (real pages carry 200+, a grey/reCAPTCHA page ~0), failing closed on gated/error, so a masked reCAPTCHA page is never captured and later served as results. NopeCHA stays disabled (it can't solve the Enterprise reCAPTCHA and re-adds on-screen bars). Still requires dash-to-dock dock-fixed=false; release gates still open"
 }

@@ -37,6 +37,9 @@ class Controller {
 
   // Smallest MHTML worth caching; a real image-results page is several MB, a block/error page is tiny.
   SNAPSHOT_MIN_BYTES = 100 * 1024;
+  // A clean image-results page carries 200+ thumbnails (measured 209-780 on live captures);
+  // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
+  IMAGE_RESULT_MIN = 25;
 
   // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
   static GATE_CHECK_JS = "(function(){try{" +
@@ -46,6 +49,12 @@ class Controller {
     "if(t.indexOf('unusual traffic')>=0)return true;" +
     "if(t.indexOf('not a robot')>=0)return true;" +
     "return false;}catch(e){return false;}})()";
+
+  // Count real image-result thumbnails (positive clean signal); -1 on any page error.
+  static CLEAN_CHECK_JS = "(function(){try{" +
+    "if(location.pathname.indexOf('/sorry')===0)return 0;" +
+    "return document.querySelectorAll('img[src^=\"http\"],img[src^=\"data:\"]').length;" +
+    "}catch(e){return -1;}})()";
 
   constructor() {
     /** @type {Object.<number, {driver: WebDriver|null, scrollState: number, pid: number}>} */
@@ -62,11 +71,33 @@ class Controller {
     /** @type {Set<string>} queries already refreshed this run */
     this.refreshedSnapshots = new Set();
     this.initSnapshots();
+    this.resetDisplayProfiles();
+  }
+
+  profileRoot() {
+    return process.env.TRANSPLAYER_PROFILE_DIR ||
+      path.join(os.homedir(), ".local/share/transplayer/profiles-r9-basic");
   }
 
   snapshotRoot() {
-    return path.join(process.env.TRANSPLAYER_PROFILE_DIR ||
-      path.join(os.homedir(), ".local/share/transplayer/profiles-r9-basic"), "snapshots");
+    return path.join(this.profileRoot(), "snapshots");
+  }
+
+  // Start every run with fresh display profiles (production only). A flagged, long-lived se_*
+  // profile never gets a clean warm-up for its "hard" queries, so its snapshot goes stale; a
+  // fresh profile gets Google's new-session grace window and captures today's page. The
+  // snapshots/ cache is kept (it persists across runs as a fallback).
+  resetDisplayProfiles() {
+    if (!process.env.TRANSPLAYER_PROFILE_DIR) return;
+    const root = this.profileRoot();
+    let entries;
+    try { entries = fs.readdirSync(root); } catch (_) { return; }
+    for (const name of entries) {
+      if (/^se_\d+$/.test(name)) {
+        try { fs.rmSync(path.join(root, name), { recursive: true, force: true }); }
+        catch (_) { /* best effort */ }
+      }
+    }
   }
 
   snapshotPath(url) {
@@ -108,8 +139,9 @@ class Controller {
     const url = entry.captureUrl;
     entry.captureUrl = null; // one-shot per clean navigation
     if (this.refreshedSnapshots.has(url)) return; // already refreshed this run
-    // Never cache a gated/CAPTCHA page (Google can serve the reCAPTCHA inline on /search).
-    if (entry.driver && await this.isGated(entry.driver)) return;
+    // Only cache a confirmed, populated image-results page; fail closed (grey/gated/error -> skip)
+    // so a masked reCAPTCHA page is never captured and later served as if it were real results.
+    if (!entry.driver || !(await this.isCleanResults(entry.driver))) return;
     this.refreshedSnapshots.add(url);
     // One capture can fail transiently (the driver is also using this page); retry once.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -140,6 +172,17 @@ class Controller {
       const landed = await driver.getCurrentUrl();
       if (typeof landed === "string" && landed.includes("/sorry/")) return true;
       return !!(await driver.executeScript("return " + Controller.GATE_CHECK_JS));
+    } catch (_) { return false; }
+  }
+
+  // Positive clean-page check: a real Google image-results page has hundreds of thumbnails;
+  // a grey/reCAPTCHA/blocked page has ~0. Fail closed (gated, too few images, or any error
+  // -> not clean) so a masked page is never cached and served.
+  async isCleanResults(driver) {
+    try {
+      if (await this.isGated(driver)) return false;
+      const count = await driver.executeScript("return " + Controller.CLEAN_CHECK_JS);
+      return typeof count === "number" && count >= this.IMAGE_RESULT_MIN;
     } catch (_) { return false; }
   }
 
