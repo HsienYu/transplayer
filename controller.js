@@ -40,8 +40,9 @@ class Controller {
   // A clean image-results page carries 200+ thumbnails (measured 209-780 on live captures);
   // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
   IMAGE_RESULT_MIN = 25;
-  // During a long scroll, re-check gating and snapshot freshness this often (iterations).
-  GATE_RECHECK_EVERY = 200;
+  // During a long scroll, re-check gating and snapshot freshness this often (iterations;
+  // ~1s at SCROLL_INTERVAL=10ms) so a mid-display gate swaps to the snapshot quickly.
+  GATE_RECHECK_EVERY = 100;
 
   // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
   static GATE_CHECK_JS = "(function(){try{" +
@@ -190,7 +191,11 @@ class Controller {
     if (!entry || !entry.driver || !entry.captureUrl) return false;
     const url = entry.captureUrl;
     try {
-      if (!(await this.isGated(entry.driver)) || !this.hasSnapshot(url)) return false;
+      // Positive check: a window that loaded clean should still be a real image-results page.
+      // If it no longer is (an inline reCAPTCHA / grey / blocked page has ~0 thumbnails, and
+      // isGated also catches /sorry/ and known markers), swap to the query's latest snapshot.
+      if (await this.isCleanResults(entry.driver)) return false;
+      if (!this.hasSnapshot(url)) return false;
       await entry.driver.get("file://" + this.snapshotPath(url));
       this._clearCapture(id);
       this._recordServed(id, url);

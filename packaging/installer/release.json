@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc12",
+  "version": "1.1.0~rc13",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc12 fixes two live issues on top of rc11. (1) Mid-scroll gate fallback: when a page navigates to /sorry/ mid-scroll the scrollBy script aborts, which previously exited the scroll loop before the gating re-check ran, so the window stayed on the CAPTCHA; now a scrollBy error triggers serveSnapshotIfGated immediately, and the re-check cadence is faster (every 200 iterations). (2) Seed loads more images before capture: scroll further in smaller steps with longer waits, then return to the top, so snapshots no longer have large blank areas where lazy thumbnails had not loaded."
+  "status": "RC — rc13: (A) account login — transplayer snapshot-login (and a button in the settings GUI) opens Chrome on a persistent seed-account profile for a one-time Google login; the snapshot seed then uses that logged-in profile first (a signed-in account gates far less), falling back to fresh throwaway profiles. Use a dedicated/throwaway account, never personal. Plus robust mid-display gating: serveSnapshotIfGated now uses the positive isCleanResults check (any non-results page — inline reCAPTCHA / grey / blank — swaps to the latest snapshot, not just /sorry/), checked every ~1s."
 }

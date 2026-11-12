@@ -372,12 +372,15 @@ test("resetDisplayProfiles is a no-op in seed mode so the live player's se_* sur
   assert(fsReal.existsSync(se));
 });
 
-function servingDriver({ gated, getCurrentUrl = "https://www.google.com/search?q=x&udm=2" } = {}) {
+function servingDriver({ gated = false, images = 500, getCurrentUrl = "https://www.google.com/search?q=x&udm=2" } = {}) {
   const calls = { get: [] };
   return { calls, driver: {
     async get(u) { calls.get.push(u); },
     async getCurrentUrl() { return getCurrentUrl; },
-    async executeScript() { return gated; }, // GATE_CHECK_JS result
+    async executeScript(s) {
+      if (String(s).includes("img[src")) return images; // CLEAN_CHECK_JS -> thumbnail count
+      return gated;                                      // GATE_CHECK_JS -> gated
+    },
   } };
 }
 
@@ -394,13 +397,25 @@ test("serveSnapshotIfGated swaps a mid-display gated window to the latest snapsh
   assert.equal(f.controller.browsers[13].captureUrl, null);
 });
 
-test("serveSnapshotIfGated leaves a clean window alone", async () => {
+test("serveSnapshotIfGated leaves a clean, populated results window alone", async () => {
   const f = snapFixture();
   const url = "https://www.google.com/search?q=clean&tbm=isch";
-  const d = servingDriver({ gated: false });
+  const d = servingDriver({ gated: false, images: 500 });
   f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
   assert.equal(await f.controller.serveSnapshotIfGated(13), false);
   assert.deepEqual(d.calls.get, []);
+});
+
+test("serveSnapshotIfGated swaps an inline-reCAPTCHA / blank page (few images, not /sorry/) to the snapshot", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=inline&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  const d = servingDriver({ gated: false, images: 2 }); // not /sorry/, no gate marker, but ~0 results
+  f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), true);
+  assert.deepEqual(d.calls.get, ["file://" + snap]);
 });
 
 test("refreshServedSnapshotIfNewer reloads when the seed has written a newer snapshot", async () => {

@@ -15,7 +15,8 @@ def main():
     parser.add_argument("action", nargs="?", default="setup",
                         choices=["setup", "configure", "start", "stop", "status",
                                  "login", "play", "doctor", "detach", "enable-extension",
-                                 "prepare-maintenance", "screens", "snapshot-seed"])
+                                 "prepare-maintenance", "screens", "snapshot-seed",
+                                 "snapshot-login"])
     parser.add_argument("--video", type=Path)
     parser.add_argument("--autostart", action="store_true")
     parser.add_argument("--replace", action="store_true", help="Confirm changing an owned configuration")
@@ -53,6 +54,8 @@ def main():
         runtime.play(home)
     elif args.action == "snapshot-seed":
         runtime.seed(home)
+    elif args.action == "snapshot-login":
+        print(runtime.snapshot_login(home))
     elif args.action == "doctor":
         report = {"release": RELEASE["release"], "status": RELEASE["status"]}
         for name, check in [("platform", runtime.platform_check),

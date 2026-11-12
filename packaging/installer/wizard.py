@@ -110,6 +110,8 @@ def show():
         ("顯示方向與左右測試圖（須先停止播放）", lambda: task(patterns)),
         ("開始播放", lambda: task(lambda: runtime.supervisor(Path.home(), "start"))),
         ("停止播放", lambda: task(lambda: runtime.supervisor(Path.home(), "stop"))),
+        ("登入快照 Google 帳號（可選；請用拋棄式帳號，登入後關閉視窗）",
+         lambda: task(lambda: runtime.snapshot_login(Path.home()))),
         ("準備更新或移除（須先停止播放）",
          lambda: task(lambda: runtime.supervisor(Path.home(), "prepare-maintenance"))),
     ]:

@@ -42,10 +42,20 @@ async function main() {
   const controller = new Controller(); // only for isCleanResults / writeSnapshot / snapshotPath
   const seedProfiles = [];
 
+  const ACCOUNT = path.join(PROFILE_ROOT, "seed-account");
   const makeSession = async (n) => {
-    const profileDir = path.join(PROFILE_ROOT, `seed-${n}`);
-    seedProfiles.push(profileDir);
-    try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { /* fresh */ }
+    let profileDir;
+    if (n === 1 && fs.existsSync(ACCOUNT)) {
+      // A logged-in Google account (set up once via `transplayer snapshot-login`) gates far
+      // less, so use it for the first pass and NEVER wipe it. Fresh throwaway profiles below
+      // remain the fallback for anything it still can't capture.
+      profileDir = ACCOUNT;
+      console.log("seed using logged-in account profile");
+    } else {
+      profileDir = path.join(PROFILE_ROOT, `seed-${n}`);
+      seedProfiles.push(profileDir);
+      try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { /* fresh */ }
+    }
     // Launch offscreen (beyond the 2160-wide desktop) so a boot-time seed never flashes
     // over the artwork; the probe also setRects as a fallback.
     return new ChromeSession({ chromePath: CHROME, driverPath: DRIVER, profileDir, env: process.env,

@@ -285,6 +285,25 @@ def seed(home):
               [str(APP / "runtime/electron"), str(APP / "app/seed.js")], env)
 
 
+def snapshot_login(home):
+    """Open a visible Chrome on the persistent seed-account profile so the operator logs into
+    a dedicated Google account once; the snapshot seed then uses it (a signed-in account gates
+    far less). Runs as the display account and waits for the window to be closed."""
+    if os.getuid() == 0:
+        raise SetupError("不可使用 root 登入快照帳號。")
+    env = session_env(home)
+    for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"):
+        if not env.get(k):
+            raise SetupError("登入需要圖形桌面授權；請由桌面執行。")
+    profile = home / ".local/share/transplayer/profiles-r10-basic/seed-account"
+    profile.mkdir(parents=True, exist_ok=True)
+    subprocess.run([str(APP / "browser/chrome"), "--user-data-dir=" + str(profile),
+                    "--ozone-platform=x11", "--password-store=basic", "--no-first-run",
+                    "--no-default-browser-check", "--disable-blink-features=AutomationControlled",
+                    "https://accounts.google.com/"], env=env)
+    return "登入視窗已關閉；快照 seed 之後會使用此帳號。請用專用（拋棄式）帳號，勿用私人帳號。"
+
+
 def _spawn_seed(home):
     """Run the snapshot seed in the background at login so every boot refreshes the cache
     to same-day content. Best effort: never block or fail the player start on it."""
