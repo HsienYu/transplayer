@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc10",
+  "version": "1.1.0~rc11",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc10 adds `transplayer snapshot-seed` (B): a one-shot seed that rotates fresh Chrome profiles to capture a clean image-results page for all 13 queries into the shared cache, reaching the hard queries that even rc9's fresh display profiles can't on a flagged IP (new-session grace window; capture clean back-to-back, rotate on gate; bounded by 20 profiles). Reuses rc9's isCleanResults/writeSnapshot; runs safe alongside the live player (own seed-* profiles, TRANSPLAYER_SEED stops it wiping se_*). Account-login (A) to layer in via the settings GUI. rc9 hardens the snapshot cache against stale/grey content. (1) Fresh display profiles each run: the controller removes the persistent se_* chrome profiles at startup (keeping the snapshots/ cache) so every run starts in Google's new-session grace window and the post-boot warm-up captures today's clean page for all 13 queries, instead of a flagged long-lived profile that can never re-capture its 'hard' queries and keeps serving a days-old snapshot. (2) Positive capture gate: a page is cached only when it has >=25 image-result thumbnails (real pages carry 200+, a grey/reCAPTCHA page ~0), failing closed on gated/error, so a masked reCAPTCHA page is never captured and later served as results. NopeCHA stays disabled (it can't solve the Enterprise reCAPTCHA and re-adds on-screen bars). Still requires dash-to-dock dock-fixed=false; release gates still open"
+  "status": "RC — rc11 adds serving robustness: a window gated MID-display (clean at goTo, inline reCAPTCHA appears on scroll) swaps to the query latest snapshot (serveSnapshotIfGated), and a window already serving a snapshot reloads when the seed writes a newer one (refreshServedSnapshotIfNewer) — always shows the freshest same-day page. Window 13 (busiest, gates most) kept as-is (option B): seed + serving cover it. Builds on rc10 snapshot-seed (+boot auto) and rc9 cache. Account-login (A) via settings GUI to follow."
 }
