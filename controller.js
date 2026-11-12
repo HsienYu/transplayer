@@ -40,6 +40,8 @@ class Controller {
   // A clean image-results page carries 200+ thumbnails (measured 209-780 on live captures);
   // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
   IMAGE_RESULT_MIN = 25;
+  // During a long scroll, re-check gating and snapshot freshness this often (iterations).
+  GATE_RECHECK_EVERY = 500;
 
   // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
   static GATE_CHECK_JS = "(function(){try{" +
@@ -164,8 +166,54 @@ class Controller {
     }
   }
 
-  _markCapture(id, url) { if (this.browsers[id]) this.browsers[id].captureUrl = url; }
+  _markCapture(id, url) {
+    const entry = this.browsers[id];
+    if (entry) { entry.captureUrl = url; entry.servedSnapshot = null; } // clean page, not a snapshot
+  }
   _clearCapture(id) { if (this.browsers[id]) this.browsers[id].captureUrl = null; }
+
+  // Remember which snapshot a window is currently serving, and its freshness, so we can
+  // reload it if the seed later writes a newer page for the same query.
+  _recordServed(id, url) {
+    const entry = this.browsers[id];
+    if (!entry) return;
+    let mtime = 0;
+    try { mtime = fs.statSync(this.snapshotPath(url)).mtimeMs; } catch (_) { /* best effort */ }
+    entry.servedSnapshot = { url, mtime };
+  }
+
+  // Mid-display fallback: a page clean at goTo can show an inline reCAPTCHA later (on
+  // scroll/interaction). If the window is now gated and we have a snapshot for the query it
+  // is showing, swap to the latest snapshot rather than leave a CAPTCHA on the display.
+  async serveSnapshotIfGated(id) {
+    const entry = this.browsers[id];
+    if (!entry || !entry.driver || !entry.captureUrl) return false;
+    const url = entry.captureUrl;
+    try {
+      if (!(await this.isGated(entry.driver)) || !this.hasSnapshot(url)) return false;
+      await entry.driver.get("file://" + this.snapshotPath(url));
+      this._clearCapture(id);
+      this._recordServed(id, url);
+      console.log(`CAPTCHA served-snapshot id=${id} url=${url} mid-display`);
+      return true;
+    } catch (_) { return false; }
+  }
+
+  // Always show the freshest snapshot: if the seed writes a newer page for the query a
+  // window is serving (e.g. the boot seed finishing after the display started), reload it.
+  async refreshServedSnapshotIfNewer(id) {
+    const entry = this.browsers[id];
+    if (!entry || !entry.driver || !entry.servedSnapshot) return false;
+    const { url } = entry.servedSnapshot;
+    try {
+      const current = fs.statSync(this.snapshotPath(url)).mtimeMs;
+      if (current <= entry.servedSnapshot.mtime) return false;
+      await entry.driver.get("file://" + this.snapshotPath(url));
+      entry.servedSnapshot.mtime = current;
+      console.log(`CAPTCHA served-snapshot id=${id} url=${url} refreshed`);
+      return true;
+    } catch (_) { return false; }
+  }
 
   // True when the page is a Google abuse gate, by URL OR page content. Google serves the
   // "unusual traffic" reCAPTCHA both at /sorry/ AND inline on the /search path, so a URL-only
@@ -593,6 +641,7 @@ class Controller {
           console.log(`CAPTCHA served-snapshot id=${theId} url=${theUrl}`);
           await driver.get("file://" + this.snapshotPath(theUrl));
           this._clearCapture(theId);
+          this._recordServed(theId, theUrl);
           return true;
         }
         // No snapshot yet (early, pre-capture): retry once after a short wait.
@@ -632,6 +681,10 @@ class Controller {
         if (this.browsers[theId].scrollState != 0) {
           // console.log('scroll to is break');
           break;
+        }
+        if (i > 0 && i % this.GATE_RECHECK_EVERY === 0) {
+          if (await this.serveSnapshotIfGated(theId)) break; // gated mid-display -> serve snapshot
+          await this.refreshServedSnapshotIfNewer(theId);    // or freshen to a newer snapshot
         }
 
         await driver.executeScript(`window.scrollBy(0, ${this.SCROLL_GAP})`);

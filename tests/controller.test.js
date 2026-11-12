@@ -372,6 +372,62 @@ test("resetDisplayProfiles is a no-op in seed mode so the live player's se_* sur
   assert(fsReal.existsSync(se));
 });
 
+function servingDriver({ gated, getCurrentUrl = "https://www.google.com/search?q=x&udm=2" } = {}) {
+  const calls = { get: [] };
+  return { calls, driver: {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return getCurrentUrl; },
+    async executeScript() { return gated; }, // GATE_CHECK_JS result
+  } };
+}
+
+test("serveSnapshotIfGated swaps a mid-display gated window to the latest snapshot", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=mid&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  const d = servingDriver({ gated: true });
+  f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), true);
+  assert.deepEqual(d.calls.get, ["file://" + snap]);
+  assert.equal(f.controller.browsers[13].captureUrl, null);
+});
+
+test("serveSnapshotIfGated leaves a clean window alone", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=clean&tbm=isch";
+  const d = servingDriver({ gated: false });
+  f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), false);
+  assert.deepEqual(d.calls.get, []);
+});
+
+test("refreshServedSnapshotIfNewer reloads when the seed has written a newer snapshot", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=fresh&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "OLD".repeat(40000));
+  const d = servingDriver();
+  f.controller.browsers[13] = { servedSnapshot: { url, mtime: 0 }, driver: d.driver };
+  assert.equal(await f.controller.refreshServedSnapshotIfNewer(13), true);
+  assert.deepEqual(d.calls.get, ["file://" + snap]);
+});
+
+test("refreshServedSnapshotIfNewer does nothing when the snapshot is unchanged", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=same&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  const mt = fsReal.statSync(snap).mtimeMs;
+  const d = servingDriver();
+  f.controller.browsers[13] = { servedSnapshot: { url, mtime: mt }, driver: d.driver };
+  assert.equal(await f.controller.refreshServedSnapshotIfNewer(13), false);
+  assert.deepEqual(d.calls.get, []);
+});
+
 test("goTo serves cache when the page shows an inline reCAPTCHA (content-gated, not /sorry/)", async () => {
   const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
   const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
