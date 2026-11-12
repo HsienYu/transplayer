@@ -88,7 +88,10 @@ class Controller {
   // fresh profile gets Google's new-session grace window and captures today's page. The
   // snapshots/ cache is kept (it persists across runs as a fallback).
   resetDisplayProfiles() {
-    if (!process.env.TRANSPLAYER_PROFILE_DIR) return;
+    // Skip in seed mode: the snapshot seed constructs a Controller only to reuse
+    // isCleanResults/writeSnapshot/snapshotPath, and must never wipe the live player's
+    // se_* profiles (it uses its own seed-* profiles).
+    if (!process.env.TRANSPLAYER_PROFILE_DIR || process.env.TRANSPLAYER_SEED === "1") return;
     const root = this.profileRoot();
     let entries;
     try { entries = fs.readdirSync(root); } catch (_) { return; }

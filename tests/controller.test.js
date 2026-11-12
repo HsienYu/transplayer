@@ -361,6 +361,17 @@ test("resetDisplayProfiles clears se_* display profiles each run but keeps the s
   assert(fsReal.existsSync(keep)); // persisted snapshot cache survives a fresh-profile run
 });
 
+test("resetDisplayProfiles is a no-op in seed mode so the live player's se_* survive", () => {
+  const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
+  const Controller = controllerClass({ process: { env: {
+    TRANSPLAYER_PROFILE_DIR: dir, TRANSPLAYER_SEED: "1" } } });
+  const se = path.join(dir, "se_13");
+  fsReal.mkdirSync(se, { recursive: true });
+  const controller = new Controller(); // constructor must NOT wipe se_* under TRANSPLAYER_SEED=1
+  controller.resetDisplayProfiles();
+  assert(fsReal.existsSync(se));
+});
+
 test("goTo serves cache when the page shows an inline reCAPTCHA (content-gated, not /sorry/)", async () => {
   const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
   const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
