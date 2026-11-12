@@ -105,3 +105,43 @@ This is still an **RC** — the stable-release gates below are not all passed.
   branches only closed the PRs — the 19 vulnerabilities still need real dependency upgrades
   (or disable Dependabot to stop PR re-creation).
 - Open questions: when to promote beyond RC to a stable release/tag (user's call).
+
+### 2026-11-12 05:11 CET (04:11Z) — Claude Code (Opus 4.8)
+- State: reCAPTCHA stale/grey mitigation chain rc9→rc14, all deployed to the live host and
+  merged+tagged locally (push + GitHub Release done through rc13; rc14 push/Release still
+  pending user go-ahead). rc14 (`master` 97addf8, tag `v1.1.0-rc14`) DEPLOYED 04:10Z: slow
+  snapshot seed — `controller.waitImagesSettled()` waits for Google image thumbnails to
+  actually load (`complete && naturalWidth>0`, not just has-src) before capture; `.n` sidecar
+  records the loaded count; `writeSnapshotIfRicher()` never downgrades a richer SAME-DAY
+  snapshot (an older one is always refreshed, so freshness still wins). 158 Node / 52 Python
+  green (9 new). Host rebooted; boot auto-seed (the new slow seed) running; live verification
+  of self-containment IN PROGRESS (background monitor bjm6coth2).
+- Decisions: (1) Grey root cause measured, not assumed — the display RE-FETCHES unembedded
+  thumbnails from the network (live "map of melaka fort": 217/220 loaded, 3 grey), so
+  under-embedding causes brief grey on re-fetch, not permanent grey; rc14 makes snapshots
+  self-contained. User chose "keep seed, wait for images to load" over reverting to
+  opportunistic capture (which would bring back the ~7 stale hard queries). (2) rc13 account
+  login (A) is DONE and logged in (seed-account has Cookies ~32 KB; login-seed captured
+  13/13); efficacy (does the account reduce gating?) NOT yet cleanly confirmed — needs a
+  second seed showing profiles≤2. (3) Deploy gotcha recorded: the maintenance gate
+  (`maintenance.py scan_processes`) refuses install while ANY process exe is under
+  /opt/transplayer/releases or /usr/lib/transplayer — INCLUDING the PM2 God daemon that
+  `transplayer stop`/pm2 spawn. Correct order: `prepare-maintenance` (it runs `pm2 kill`,
+  runtime.py:219) → wait until 0 such processes → install; do NOT run `transplayer stop`
+  after prepare-maintenance (it respawns the daemon). A first attempt failed on this and left
+  rc13 half-configured; recovered with `dpkg --configure transplayer`.
+- Next steps: (a) finish rc14 live verification — re-run the embedded-vs-<img> analysis; pass
+  = suspects ≥90% embedded (were ~48%), rest ≥90% (were ~70%), `.n` ≈ embedded; confirm boot
+  autoplay + two portrait displays. (b) On the user's go-ahead, push master + tag v1.1.0-rc14
+  and cut the GitHub pre-release with the rc14 .deb (host build
+  r10-rc14-20261112T040452Z/…rc14_amd64.deb, SHA 488cdedf). (c) Recommend rotating the hcw
+  sudo password (it is in this transcript).
+- Open questions: **Q3 STILL OPEN** — the user reported (rc13) a window loading clean then
+  gating MID-scroll and staying stuck on reCAPTCHA (not jumping to the snapshot). It did NOT
+  reproduce in ~4 min of CDP polling (serveSnapshotIfGated fired 0 times; windows mostly gate
+  at goTo and serve the snapshot there). Untested hypothesis: the gate lands AFTER scrollTo's
+  ~90s loop ends, leaving the window idle on a live gated page with no recheck until the next
+  goTo — a lightweight post-scroll recheck timer would fix that, not a detection change.
+  Resolve with live ground truth next time the user reports a stuck window (CDP /json on the
+  se_* debug ports — se_13 writes --remote-debugging-port in /proc/<pid>/cmdline — or the
+  profile History DB).
