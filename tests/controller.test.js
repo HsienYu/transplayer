@@ -325,6 +325,109 @@ test("maybeCapture does not capture a gated page", async () => {
   assert.equal(captures, 0);
 });
 
+// --- rc14: slow seed waits for images to actually load before capturing ---
+
+// A driver whose LOADED_CHECK_JS (contains "naturalWidth") returns successive values from `seq`,
+// holding the last value once exhausted. Any other script returns 0.
+function loadedDriver(seq) {
+  let i = 0;
+  const calls = { n: 0 };
+  const driver = {
+    async executeScript(script) {
+      if (String(script).includes("naturalWidth")) {
+        calls.n++;
+        const v = i < seq.length ? seq[i] : seq[seq.length - 1];
+        i++;
+        return v;
+      }
+      return 0;
+    },
+  };
+  return { driver, calls };
+}
+
+test("countLoadedImages returns the page count and -1 on a page error", async () => {
+  const f = snapFixture();
+  const { driver } = loadedDriver([42]);
+  assert.equal(await f.controller.countLoadedImages(driver), 42);
+  const bad = { async executeScript() { throw new Error("page gone"); } };
+  assert.equal(await f.controller.countLoadedImages(bad), -1);
+});
+
+test("waitImagesSettled returns the settled max once growth stops, without waiting out the timeout", async () => {
+  const f = snapFixture();
+  const { driver, calls } = loadedDriver([10, 40, 90, 120, 120, 120, 120, 120, 120]);
+  const loaded = await f.controller.waitImagesSettled(driver,
+    { timeoutMs: 2000, stableMs: 45, pollMs: 10 });
+  assert.equal(loaded, 120);          // the high-water mark, not an early partial count
+  assert(calls.n < 40, `stopped early, polled ${calls.n} times`); // settled, did not run to timeout
+});
+
+test("waitImagesSettled returns 0 when the page never reports loaded images", async () => {
+  const f = snapFixture();
+  const bad = { async executeScript() { throw new Error("page gone"); } };
+  const loaded = await f.controller.waitImagesSettled(bad,
+    { timeoutMs: 60, stableMs: 20, pollMs: 10 });
+  assert.equal(loaded, 0);
+});
+
+test("writeSnapshotIfRicher writes a fresh snapshot and records the loaded count", () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=fresh&tbm=isch";
+  assert.equal(f.controller.writeSnapshotIfRicher(url, "M".repeat(200000), 217), "written");
+  assert(fsReal.existsSync(f.controller.snapshotPath(url)));
+  assert.equal(fsReal.readFileSync(f.controller.snapshotPath(url) + ".n", "utf8"), "217");
+});
+
+test("writeSnapshotIfRicher keeps a richer existing snapshot instead of downgrading to a sparse one", () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=keep&tbm=isch";
+  f.controller.writeSnapshotIfRicher(url, "RICH".repeat(60000), 300);
+  const before = fsReal.readFileSync(f.controller.snapshotPath(url), "utf8");
+  // 100 < 300 * 0.7 (=210) -> keep the richer one
+  assert.equal(f.controller.writeSnapshotIfRicher(url, "POOR".repeat(60000), 100), "kept");
+  assert.equal(fsReal.readFileSync(f.controller.snapshotPath(url), "utf8"), before); // unchanged
+  assert.equal(fsReal.readFileSync(f.controller.snapshotPath(url) + ".n", "utf8"), "300");
+});
+
+test("writeSnapshotIfRicher replaces when the new capture is at least as rich", () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=better&tbm=isch";
+  f.controller.writeSnapshotIfRicher(url, "OLD".repeat(40000), 100);
+  assert.equal(f.controller.writeSnapshotIfRicher(url, "NEW".repeat(80000), 260), "written");
+  assert.match(fsReal.readFileSync(f.controller.snapshotPath(url), "utf8"), /^NEW/);
+  assert.equal(fsReal.readFileSync(f.controller.snapshotPath(url) + ".n", "utf8"), "260");
+});
+
+test("writeSnapshotIfRicher rejects a capture too small to be a real page", () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=tiny&tbm=isch";
+  assert.equal(f.controller.writeSnapshotIfRicher(url, "x".repeat(1000), 217), "rejected");
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
+test("writeSnapshotIfRicher refreshes a richer-but-OLD snapshot (freshness beats richness after a day)", () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=stale-rich&tbm=isch";
+  f.controller.writeSnapshotIfRicher(url, "RICH".repeat(60000), 300);
+  // Age the cached snapshot two days so the richness guard must yield to freshness.
+  const snap = f.controller.snapshotPath(url);
+  const old = (Date.now() - 48 * 3600 * 1000) / 1000;
+  fsReal.utimesSync(snap, old, old);
+  // 100 < 300*0.7 (would be "kept" if recent) -- but it is old, so it must be rewritten.
+  assert.equal(f.controller.writeSnapshotIfRicher(url, "POOR".repeat(60000), 100), "written");
+  assert.match(fsReal.readFileSync(snap, "utf8"), /^POOR/);
+  assert.equal(fsReal.readFileSync(snap + ".n", "utf8"), "100");
+});
+
+test("waitImagesSettled returns the dropped count when the page navigates/gates mid-wait", async () => {
+  const f = snapFixture();
+  const { driver } = loadedDriver([120, 120, 0, 0, 0]); // loaded, then a gate blanks the DOM
+  const loaded = await f.controller.waitImagesSettled(driver,
+    { timeoutMs: 2000, stableMs: 60, pollMs: 10 });
+  assert.equal(loaded, 0); // reports the collapse, so the seed's LOADED_IMAGE_MIN gate skips it
+});
+
 test("maybeCapture refuses a grey / near-empty page (positive image-results gate)", async () => {
   const f = snapFixture();
   const url = "https://www.google.com/search?q=grey&tbm=isch";

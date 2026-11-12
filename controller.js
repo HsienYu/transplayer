@@ -40,6 +40,23 @@ class Controller {
   // A clean image-results page carries 200+ thumbnails (measured 209-780 on live captures);
   // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
   IMAGE_RESULT_MIN = 25;
+  // Minimum images that must have ACTUALLY loaded (naturalWidth>0), not merely carry a src,
+  // before the seed captures. Google lazy-loads thumbnails; capturing before they load embeds
+  // nothing for them, so the display re-fetches them (brief grey) or shows grey if the network
+  // lags. Waiting until this many are loaded makes the snapshot self-contained.
+  LOADED_IMAGE_MIN = 25;
+  // Never replace a cached snapshot with a sparser one: if a fresh capture has fewer loaded
+  // images than this fraction of the one already cached (recorded in the .n sidecar), keep the
+  // richer one. Guards a good snapshot against a bad-network seed night.
+  SNAPSHOT_KEEP_RATIO = 0.7;
+  // ...but only guard against a RECENT richer snapshot. An older one must always be refreshable,
+  // or a rich day would freeze a query stale forever (the exact failure the seed exists to kill).
+  SNAPSHOT_KEEP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  // waitImagesSettled timing: poll the loaded-image count until it stops growing for STABLE_MS,
+  // or give up after TIMEOUT_MS. These are the slow, patient capture the exhibition wants.
+  IMG_SETTLE_TIMEOUT_MS = 30000;
+  IMG_SETTLE_STABLE_MS = 2500;
+  IMG_SETTLE_POLL_MS = 600;
   // During a long scroll, re-check gating and snapshot freshness this often (iterations;
   // ~1s at SCROLL_INTERVAL=10ms) so a mid-display gate swaps to the snapshot quickly.
   GATE_RECHECK_EVERY = 100;
@@ -58,6 +75,14 @@ class Controller {
     "if(location.pathname.indexOf('/sorry')===0)return 0;" +
     "return document.querySelectorAll('img[src^=\"http\"],img[src^=\"data:\"]').length;" +
     "}catch(e){return -1;}})()";
+
+  // Count images that have ACTUALLY finished loading (rendered pixels), not just carry a src.
+  // This is what decides whether a captured MHTML is self-contained; -1 on any page error.
+  static LOADED_CHECK_JS = "(function(){try{" +
+    "if(location.pathname.indexOf('/sorry')===0)return 0;" +
+    "var n=0,i=document.images;" +
+    "for(var k=0;k<i.length;k++){if(i[k].complete&&i[k].naturalWidth>0)n++;}" +
+    "return n;}catch(e){return -1;}})()";
 
   constructor() {
     /** @type {Object.<number, {driver: WebDriver|null, scrollState: number, pid: number}>} */
@@ -135,6 +160,67 @@ class Controller {
       try { fs.rmSync(temp, { force: true }); } catch (_) { /* ignore */ }
       throw error;
     }
+  }
+
+  // How many loaded images the cached snapshot for this query recorded (0 if unknown/none).
+  snapshotLoadedCount(url) {
+    try { return parseInt(fs.readFileSync(this.snapshotPath(url) + ".n", "utf8"), 10) || 0; }
+    catch (_) { return 0; }
+  }
+
+  // Age of the cached snapshot in ms (Infinity if none) -- used to let freshness override the
+  // richness guard once a snapshot is older than a day.
+  snapshotAgeMs(url) {
+    try { return Date.now() - fs.statSync(this.snapshotPath(url)).mtimeMs; }
+    catch (_) { return Infinity; }
+  }
+
+  // Write a snapshot only if it is at least as rich as the one already cached. The .n sidecar
+  // records the loaded-image count so a later seed on a bad-network night cannot overwrite a
+  // good, image-full snapshot with a sparse (grey) one. Returns a status:
+  //   "written"  -- the new snapshot replaced/created the cache
+  //   "kept"     -- an existing snapshot is richer and was kept (the query is still covered)
+  //   "rejected" -- the data was too small to be a real page
+  writeSnapshotIfRicher(url, data, loadedCount) {
+    if (typeof data !== "string" || data.length < this.SNAPSHOT_MIN_BYTES) return "rejected";
+    const prev = this.snapshotLoadedCount(url);
+    // Keep the existing one only if it is both richer AND recent; an older snapshot is always
+    // refreshed so a rich past day can never freeze a query stale.
+    if (prev > 0 && loadedCount < prev * this.SNAPSHOT_KEEP_RATIO &&
+        this.snapshotAgeMs(url) < this.SNAPSHOT_KEEP_MAX_AGE_MS) return "kept";
+    if (!this.writeSnapshot(url, data)) return "rejected";
+    try { fs.writeFileSync(this.snapshotPath(url) + ".n", String(loadedCount), { mode: 0o600 }); }
+    catch (_) { /* best effort; the mhtml is already in place */ }
+    return "written";
+  }
+
+  // Number of images that have finished loading on the page right now (-1 on error).
+  async countLoadedImages(driver) {
+    try {
+      const n = await driver.executeScript("return " + Controller.LOADED_CHECK_JS);
+      return typeof n === "number" ? n : -1;
+    } catch (_) { return -1; }
+  }
+
+  // Patiently wait for lazy-loaded thumbnails to finish before capturing: poll the loaded-image
+  // count until it stops growing for STABLE_MS (settled), or give up after TIMEOUT_MS. Returns the
+  // final loaded count. This is the "slow snapshot" the exhibition wants -- a self-contained page.
+  async waitImagesSettled(driver, opts = {}) {
+    const timeoutMs = opts.timeoutMs ?? this.IMG_SETTLE_TIMEOUT_MS;
+    const stableMs = opts.stableMs ?? this.IMG_SETTLE_STABLE_MS;
+    const pollMs = opts.pollMs ?? this.IMG_SETTLE_POLL_MS;
+    const now = opts.now || (() => Date.now());
+    const start = now();
+    let best = -1;
+    let stableSince = start;
+    while (now() - start < timeoutMs) {
+      const n = await this.countLoadedImages(driver);
+      if (best > 0 && n >= 0 && n < best * 0.5) return n; // sharp drop -> page navigated/gated mid-wait
+      if (n > best) { best = n; stableSince = now(); }        // still growing -> reset the settle clock
+      else if (best >= 0 && now() - stableSince >= stableMs) break; // no growth for STABLE_MS -> settled
+      await sleep(pollMs);
+    }
+    return best < 0 ? 0 : best;
   }
 
   // Capture the current clean page of a window, refreshing its cached snapshot once per run.

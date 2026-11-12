@@ -70,13 +70,34 @@ async function main() {
     catch (_) { /* WM may clamp; not fatal */ }
     await scrollToLoad(driver);
     if (!(await controller.isCleanResults(driver))) return false;
+    // Slow, patient capture: wait for the lazy-loaded thumbnails to actually finish loading before
+    // snapshotting, so the MHTML is self-contained and the wall never shows grey re-fetching. Pages
+    // whose images never fill (slow net, partial gate) are skipped rather than cached grey.
+    const loaded = await controller.waitImagesSettled(driver);
+    if (loaded < controller.LOADED_IMAGE_MIN) {
+      // Treated as a gate by the seeder (rotates to a fresh profile); honest about why.
+      console.log(`seed skip (only ${loaded} images loaded, rotating) url=${url}`);
+      return false;
+    }
+    // Re-confirm the page did not gate (redirect to /sorry/, inline reCAPTCHA) during the settle
+    // wait before we snapshot it -- otherwise a gate that appeared mid-wait would be cached.
+    if (!(await controller.isCleanResults(driver))) {
+      console.log(`seed skip (gated during settle, rotating) url=${url}`);
+      return false;
+    }
     try {
       const mhtml = await session.captureSnapshot();
-      if (controller.writeSnapshot(url, mhtml)) {
-        console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length}`);
+      const status = controller.writeSnapshotIfRicher(url, mhtml, loaded);
+      if (status === "written") {
+        console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length} loaded=${loaded}`);
         return true;
       }
-      return false;
+      if (status === "kept") {
+        // An existing snapshot is richer; the query is already covered, so do not keep retrying it.
+        console.log(`seed kept richer existing snapshot url=${url} (new loaded=${loaded})`);
+        return true;
+      }
+      return false; // rejected: capture too small to be a real page
     } catch (_) { return false; }
   };
 

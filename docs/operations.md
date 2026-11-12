@@ -132,8 +132,20 @@ MHTML（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`，log `CAPTCHA cach
 因此務必維持「每天重開機一次」的運作習慣。AppArmor 的 chrome-first profile 為
 `flags=(unconfined){userns}`，故 `file://` 讀取不受限。
 
-若 IP 被標記很重、整個熱機階段都被擋，建議每日展場休息讓 IP 冷卻，
-或日後加 `snapshot-seed` 於 IP 最冷時慢速預抓 13 個查詢。
+**快照預抓 seed（rc10 起）**：`transplayer snapshot-seed`（開機 `login` 流程也會自動在背景跑一次）
+以輪替的全新 `seed-*` profile（有登入帳號時第一輪用 `seed-account`，永不清除）把 13 個查詢逐一抓成
+當日乾淨快照，讓長期被標記的顯示 profile 永遠抓不到的「硬查詢」也能在新 session 寬限期內抓到。
+被擋就輪替下一個 profile（上限 20 個）。
+
+**rc14 起改為「慢速 seed」**：Google 影像頁的縮圖是捲動時才延遲載入的，整批快抓會在縮圖還沒載完就
+存檔，MHTML 只內嵌已載入的部分，顯示端得上網重抓其餘縮圖（短暫灰色，網路慢時更明顯）。因此 seed
+捲動後會先 `waitImagesSettled`——輪詢「**實際載入**」的圖片數（`complete && naturalWidth>0`，不只是有
+`src`）直到不再增加才截圖，使快照自我包含；載入數低於 `LOADED_IMAGE_MIN`（25）或等待期間被擋則略過、
+不存灰頁。每個快照旁另存 `<sha256>.mhtml.n` 記錄載入圖片數；`writeSnapshotIfRicher` 以此避免把「較
+豐富且當日（24 小時內）」的快照降級成較稀疏的一張（超過 24 小時的舊快照仍以新鮮度優先、照常更新）。
+代價是開機 seed 最壞多約 6.5 分鐘（每查詢最多等 30 秒），對開機背景預抓可接受。
+
+若 IP 被標記很重、整個熱機階段都被擋，建議每日展場休息讓 IP 冷卻。
 
 ## Diagnostics / 診斷與隱私
 
