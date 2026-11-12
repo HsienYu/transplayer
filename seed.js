@@ -22,12 +22,16 @@ const CHROME = process.env.TRANSPLAYER_CHROME;
 const DRIVER = process.env.TRANSPLAYER_DRIVER;
 
 async function scrollToLoad(driver) {
-  // Load the lazy image thumbnails: the clean-check counts them and the captured MHTML
-  // should be the scrolled results page the display would otherwise show.
-  for (let i = 0; i < 6; i++) {
-    try { await driver.executeScript("window.scrollBy(0, 2500)"); } catch (_) { /* ignore */ }
-    await sleep(400);
+  // Google image search lazy-loads thumbnails as you scroll. Scroll down in small steps,
+  // waiting for each batch to load, far past the display's scroll range, then return to the
+  // top so the captured MHTML renders images from the start — otherwise the snapshot has
+  // large blank areas where thumbnails had not loaded yet.
+  for (let i = 0; i < 20; i++) {
+    try { await driver.executeScript("window.scrollBy(0, 1200)"); } catch (_) { /* ignore */ }
+    await sleep(600);
   }
+  try { await driver.executeScript("window.scrollTo(0, 0)"); } catch (_) { /* ignore */ }
+  await sleep(800);
 }
 
 async function main() {

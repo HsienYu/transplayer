@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc11",
+  "version": "1.1.0~rc12",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc11 adds serving robustness: a window gated MID-display (clean at goTo, inline reCAPTCHA appears on scroll) swaps to the query latest snapshot (serveSnapshotIfGated), and a window already serving a snapshot reloads when the seed writes a newer one (refreshServedSnapshotIfNewer) — always shows the freshest same-day page. Window 13 (busiest, gates most) kept as-is (option B): seed + serving cover it. Builds on rc10 snapshot-seed (+boot auto) and rc9 cache. Account-login (A) via settings GUI to follow."
+  "status": "RC — rc12 fixes two live issues on top of rc11. (1) Mid-scroll gate fallback: when a page navigates to /sorry/ mid-scroll the scrollBy script aborts, which previously exited the scroll loop before the gating re-check ran, so the window stayed on the CAPTCHA; now a scrollBy error triggers serveSnapshotIfGated immediately, and the re-check cadence is faster (every 200 iterations). (2) Seed loads more images before capture: scroll further in smaller steps with longer waits, then return to the top, so snapshots no longer have large blank areas where lazy thumbnails had not loaded."
 }

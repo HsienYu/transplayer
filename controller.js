@@ -41,7 +41,7 @@ class Controller {
   // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
   IMAGE_RESULT_MIN = 25;
   // During a long scroll, re-check gating and snapshot freshness this often (iterations).
-  GATE_RECHECK_EVERY = 500;
+  GATE_RECHECK_EVERY = 200;
 
   // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
   static GATE_CHECK_JS = "(function(){try{" +
@@ -687,7 +687,15 @@ class Controller {
           await this.refreshServedSnapshotIfNewer(theId);    // or freshen to a newer snapshot
         }
 
-        await driver.executeScript(`window.scrollBy(0, ${this.SCROLL_GAP})`);
+        try {
+          await driver.executeScript(`window.scrollBy(0, ${this.SCROLL_GAP})`);
+        } catch (scrollError) {
+          // The page likely navigated mid-scroll (e.g. to /sorry/), which aborts the scroll
+          // script. That is exactly a mid-display gate: fall back to the snapshot if we are
+          // now gated; otherwise let the outer handler log the real error.
+          if (await this.serveSnapshotIfGated(theId)) break;
+          throw scrollError;
+        }
         await sleep(this.SCROLL_INTERVAL);
       }
     } catch (error) {

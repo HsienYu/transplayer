@@ -428,6 +428,28 @@ test("refreshServedSnapshotIfNewer does nothing when the snapshot is unchanged",
   assert.deepEqual(d.calls.get, []);
 });
 
+test("scrollTo falls back to the snapshot when the page navigates to a gate mid-scroll", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=navgate&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  const calls = { get: [] };
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return "https://www.google.com/sorry/index?q=navgate"; }, // now gated
+    async executeScript(s) {
+      if (String(s).includes("scrollBy")) throw new Error("document unloaded"); // mid-scroll navigation
+      return true;
+    },
+  };
+  f.controller.getWebDriver = async () => driver;
+  f.controller.browsers[13] = { driver, captureUrl: url, scrollState: 0 };
+  await f.controller.scrollTo(13, 9000);
+  assert.deepEqual(calls.get, ["file://" + snap]); // served the snapshot instead of leaving the gate
+  assert.equal(f.controller.browsers[13].captureUrl, null);
+});
+
 test("goTo serves cache when the page shows an inline reCAPTCHA (content-gated, not /sorry/)", async () => {
   const dir = fsReal.mkdtempSync(path.join(os.tmpdir(), "tp-snap-"));
   const Controller = controllerClass({ process: { env: { TRANSPLAYER_PROFILE_DIR: dir } } });
