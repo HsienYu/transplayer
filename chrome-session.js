@@ -362,6 +362,9 @@ class ChromeSession {
         "--user-data-dir=" + this.options.profileDir,
         "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=" + this.port,
       ];
+      for (const extra of this.options.extraArgs || []) {
+        if (typeof extra === "string" && extra && !/[\0\r\n]/.test(extra)) launchArgs.push(extra);
+      }
       const extensionDir = this.deps.captchaExtension();
       if (typeof extensionDir === "string" && path.isAbsolute(extensionDir) &&
           !/[\0\r\n]/.test(extensionDir)) {

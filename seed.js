@@ -42,7 +42,10 @@ async function main() {
     const profileDir = path.join(PROFILE_ROOT, `seed-${n}`);
     seedProfiles.push(profileDir);
     try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { /* fresh */ }
-    return new ChromeSession({ chromePath: CHROME, driverPath: DRIVER, profileDir, env: process.env });
+    // Launch offscreen (beyond the 2160-wide desktop) so a boot-time seed never flashes
+    // over the artwork; the probe also setRects as a fallback.
+    return new ChromeSession({ chromePath: CHROME, driverPath: DRIVER, profileDir, env: process.env,
+      extraArgs: ["--window-position=4000,0", "--window-size=1280,900"] });
   };
 
   const probe = async (url, session) => {
@@ -65,7 +68,7 @@ async function main() {
 
   const seeder = new SnapshotSeeder({
     urls: queries, makeSession, probe, maxProfiles: 20,
-    log: (m) => console.log("seed " + m),
+    log: (m) => console.log(m),
   });
   const result = await seeder.run();
   for (const p of seedProfiles) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) { /* best effort */ } }

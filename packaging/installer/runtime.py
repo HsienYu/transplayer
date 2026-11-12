@@ -229,6 +229,8 @@ def _supervisor(home, action):
         if state == "stopped":
             run(pm2 + ["delete", "transplayer-r10"], env)
         run(pm2 + ["start", str(LIB / "ecosystem.config.cjs"), "--only", "transplayer-r10"], env)
+        if action == "login":
+            _spawn_seed(home)  # boot auto-login also refreshes the snapshot cache (best effort)
         return "start requested — inspect playback"
 
 
@@ -255,16 +257,8 @@ def play(home):
             "--ozone-platform=x11", "--enable-transparent-visuals", "--disable-setuid-sandbox"], env)
 
 
-def seed(home):
-    """One-shot snapshot seed: capture a clean image-results page for every query into the
-    shared snapshot cache, rotating fresh Chrome profiles. Safe to run while the player is
-    live (uses its own seed-* profiles; TRANSPLAYER_SEED stops it wiping the display's)."""
-    if os.getuid() == 0:
-        raise SetupError("不可使用 root 執行快照 seed。")
+def _seed_env(home):
     env = session_env(home)
-    for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"):
-        if not env.get(k):
-            raise SetupError("快照 seed 需要圖形桌面授權；請由桌面執行。")
     env.update({
         "TRANSPLAYER_CHROME": str(APP / "browser/chrome"),
         "TRANSPLAYER_DRIVER": str(APP / "app/bin/chrome/chromedriver"),
@@ -274,8 +268,41 @@ def seed(home):
         "TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION": "1",
         "ELECTRON_RUN_AS_NODE": "1",
     })
+    return env
+
+
+def seed(home):
+    """One-shot snapshot seed: capture a clean image-results page for every query into the
+    shared snapshot cache, rotating fresh Chrome profiles. Safe to run while the player is
+    live (uses its own seed-* profiles; TRANSPLAYER_SEED stops it wiping the display's)."""
+    if os.getuid() == 0:
+        raise SetupError("不可使用 root 執行快照 seed。")
+    env = _seed_env(home)
+    for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"):
+        if not env.get(k):
+            raise SetupError("快照 seed 需要圖形桌面授權；請由桌面執行。")
     os.execve(APP / "runtime/electron",
               [str(APP / "runtime/electron"), str(APP / "app/seed.js")], env)
+
+
+def _spawn_seed(home):
+    """Run the snapshot seed in the background at login so every boot refreshes the cache
+    to same-day content. Best effort: never block or fail the player start on it."""
+    electron = APP / "runtime/electron"
+    try:
+        if not electron.exists():
+            return
+        env = _seed_env(home)
+        if not all(env.get(k) for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY")):
+            return
+        log_dir = home / ".local/state/transplayer-r10/logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        out = open(log_dir / "seed.log", "ab")
+        subprocess.Popen([str(electron), str(APP / "app/seed.js")], env=env,
+                         stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+                         start_new_session=True)
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":

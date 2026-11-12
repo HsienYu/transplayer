@@ -51,6 +51,16 @@ test("Chrome-first starts normal Chrome before connecting and owns every resourc
     ["quit", "browser-close", "service-stop"]);
 });
 
+test("extraArgs are appended to the launch args, and control-char values are dropped", async () => {
+  const f = fixture();
+  f.options.extraArgs = ["--window-position=4000,0", "bad\nflag", "--window-size=1280,900"];
+  await new (load().ChromeSession)(f.options, f.deps).start();
+  const args = f.calls.find(c => c[0] === "spawn")[2];
+  assert(args.includes("--window-position=4000,0"));
+  assert(args.includes("--window-size=1280,900"));
+  assert(!args.some(a => /[\r\n\0]/.test(a)));
+});
+
 test("exhibition Chrome suppresses the crash restore bubble on initial launch", async () => {
   const f = fixture(), session = new (load().ChromeSession)(f.options, f.deps);
   try {
