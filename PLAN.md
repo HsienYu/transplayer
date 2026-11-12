@@ -145,3 +145,27 @@ This is still an **RC** — the stable-release gates below are not all passed.
   Resolve with live ground truth next time the user reports a stuck window (CDP /json on the
   se_* debug ports — se_13 writes --remote-debugging-port in /proc/<pid>/cmdline — or the
   profile History DB).
+
+### 2026-11-12 05:47 CET (04:47Z) — Claude Code (Opus 4.8)
+- State: rc14 PUSHED + GitHub pre-release v1.1.0-rc14 published (deb asset
+  transplayer_1.1.0.rc14_amd64.deb, SHA 488cdedf). CORRECTION to the prior entry:
+  its "snapshots must embed >=90%" criterion was MIS-STATED. Re-measured 3 ways
+  (entity-decoded, main-HTML-part, direct <img> inspection): all 13 rc14 snapshots
+  are 100% self-contained (every <img> is data: or matches an embedded jpeg part).
+  My earlier "65% embedded / needs re-fetch" was an HTML-entity (&amp;) + wrong-
+  multipart-part parsing bug. So rc13 snapshots were already self-contained and
+  rc14 is NEUTRAL on the wall (it only slowed the seed ~5 min + added a .n
+  no-downgrade safeguard whose value is the LIVE loaded count, not the MHTML count).
+- Decisions: rc14 pushed/released on the user's explicit go-ahead despite being
+  neutral (valid robustness RC). User then saw the big background (se_13) grey and
+  chose to reboot (done 04:45Z, recovered: se_13 LIVE on "world news", seed
+  re-running) and to "observe for a while" rather than dig into root cause now.
+- Next steps: grey ROOT CAUSE still open and is NOT the snapshot content — caught
+  se_13 grey WHILE serving a self-contained file:// snapshot, so it is a window-13
+  RENDER/state fault (same class as Q3). When grey recurs: CDP-inspect se_13 with
+  ONE websocket client + short timeouts (two clients hung) to see if document.images
+  are grey on the snapshot or the file:// load failed/blank. Likely a controller
+  fix. Also: rotate the hcw sudo password (in this transcript).
+- Open questions: is window-13 grey the same bug as Q3 (mid-scroll stuck)? Both are
+  "window in a bad state." A post-scroll recheck / render-watchdog on window 13 may
+  cover both. Needs live ground truth next time it is grey.
