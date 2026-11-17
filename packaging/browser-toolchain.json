@@ -13,9 +13,9 @@
     "sha256": "cae58bbd262ba5c8a0ce2540f44254b6e789efc4fe9b18bbb4a00487a9f5859e"
   },
   "extension": {
-    "file": "nopecha-0.6.1-chromium.zip",
-    "url": "https://github.com/NopeCHALLC/nopecha-extension/releases/download/0.6.1/chromium.zip",
-    "sha256": "cfbbe7b3a3d28939abe92fd7b194ae89e39aad6a286d1df89b9eed9ea2bf612e",
+    "file": "nopecha-0.6.1-chromium-automation.zip",
+    "url": "https://github.com/NopeCHALLC/nopecha-extension/releases/download/0.6.1/chromium_automation.zip",
+    "sha256": "92ebe154bd34433b4a36e6b2df33006fa6acb19a1b81031a0acb5b72be5e025a",
     "version": "0.6.1",
     "manifest_version": 3
   }

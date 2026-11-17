@@ -4,9 +4,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function timeline() {
+function timeline(env = {}) {
   const calls = [];
-  class Controller {}
+  class Controller { profileRoot() { return "/synthetic/profiles"; } }
   for (const name of ["goTo", "setBrowserRect", "scrollTo", "breakScroll", "closeBrowser", "closeAllBrowser"]) {
     Controller.prototype[name] = async (...args) => {
       calls.push(JSON.parse(JSON.stringify([name, ...args])));
@@ -15,10 +15,20 @@ function timeline() {
   }
   const handlers = {};
   const sandbox = {
-    module: { exports: {} }, console, setTimeout,
-    process: { on: (name, fn) => { handlers[name] = fn; }, exit: code => calls.push(["exit", code]) },
+    module: { exports: {} }, console, setTimeout, setInterval: () => ({ unref() {} }), clearInterval: () => {}, __dirname: "/synthetic",
+    process: { env, on: (name, fn) => { handlers[name] = fn; }, exit: code => calls.push(["exit", code]) },
     require(name) {
       if (name === "./controller") return Controller;
+      if (name === "os") return { homedir: () => "/synthetic" };
+      if (name === "path") return path;
+      if (name === "./nopecha-settings") return { prepareNopecha: () => {
+        calls.push(["prepareSolver"]);
+        return { directory: env.TEST_SOLVER === "1" ? "/synthetic/solver" : null,
+          cleanup: () => calls.push(["cleanupSolver"]) };
+      } };
+      if (name === "./seeder") return { startRefreshWorker: () => {
+        calls.push(["refresh"]); return async () => calls.push(["stopRefresh"]);
+      } };
       if (name === "selenium-webdriver") return {};
       if (name === "events") return { EventEmitter: { defaultMaxListeners: 10 } };
       throw new Error(`Unexpected dependency: ${name}`);
@@ -41,7 +51,7 @@ const searches = [
   [440, 18, "history and ethnography museum"],
   [450, 13, "history gunpowder"],
   [580, 19, "gunpowder explosion"],
-  [610, 13, " explosion"],
+  [610, 13, "explosion news"],
   [775, 13, "world news", "qdr:d"],
 ];
 
@@ -133,4 +143,29 @@ test("stop closes owned browsers once and ignores later timecodes", async () => 
   t.handlers.message({ currentTime: 10 });
   await t.handlers.SIGTERM();
   assert.deepEqual(t.calls, [["closeAllBrowser"], ["exit", 0]]);
+});
+
+for (const only of ["0", "1"]) for (const solver of ["0", "1"]) {
+  test(`independent timeline startup: snapshots=${only}, solver=${solver}`, async () => {
+    const env = { TRANSPLAYER_VALIDATED_SNAPSHOTS: "1", TRANSPLAYER_SNAPSHOT_ONLY: only,
+      TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION: "1", TEST_SOLVER: solver };
+    const t = timeline(env);
+    assert.equal(t.calls.filter(c => c[0] === "refresh").length, 1);
+    assert.equal(t.calls.some(c => c[0] === "prepareSolver"), only === "0");
+    assert.equal(env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION, only === "0" && solver === "1" ? "0" : "1");
+    await t.handlers.SIGTERM();
+    assert(t.calls.some(c => c[0] === "stopRefresh"));
+    assert.equal(t.calls.some(c => c[0] === "cleanupSolver"), only === "0");
+  });
+}
+
+test('every query capture requirement matches the actual timeline rectangle and scroll', async () => {
+  const queries=require('../queries');const t=timeline();const rectangles={};
+  for(const [second] of searches){
+    t.calls.length=0;await t.callTask(second);
+    for(const call of t.calls)if(call[0]==='setBrowserRect')rectangles[call[1]]=call[2];
+    const nav=t.calls.find(c=>c[0]==='goTo'),scroll=t.calls.find(c=>c[0]==='scrollTo');
+    const expected=rectangles[nav[1]];
+    assert.deepEqual(queries.requirements[queries.indexOf(nav[2])],{width:expected.width,height:expected.height,scroll:scroll[2]});
+  }
 });

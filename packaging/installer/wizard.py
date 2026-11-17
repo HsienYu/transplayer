@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import threading
 
-from core import RELEASE, SetupError, configure, load_owned
+from core import RELEASE, SetupError, configure, load_owned, nopecha_status, save_nopecha, snapshot_mode, save_snapshot_mode
 import runtime
 
 
@@ -16,7 +16,10 @@ def show():
     window.set_default_size(700, 650)
     window.set_border_width(20)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-    window.add(box)
+    scroll = Gtk.ScrolledWindow()
+    scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scroll.add(box)
+    window.add(scroll)
     intro = Gtk.Label(label=(
         "Ubuntu 26.04 LTS 安裝候選版 — 待實機驗證\n"
         "選擇原作品影片，使用兩台左右相鄰的 1080×1920 直向螢幕、縮放 100%。\n"
@@ -117,6 +120,66 @@ def show():
     ]:
         button = Gtk.Button(label=label)
         button.connect("clicked", lambda _button, cb=callback: cb())
+        box.pack_start(button, False, False, 0)
+        buttons.append(button)
+    snapshot_only = Gtk.CheckButton(label="只讀完整儲存成功的快照（關閉：即時搜尋，失敗改讀快照）")
+    try:
+        snapshot_only.set_active(snapshot_mode(Path.home()))
+    except SetupError as error:
+        snapshot_only.set_active(True)
+        message.set_text(str(error))
+    box.pack_start(snapshot_only, False, False, 0)
+    def save_playback():
+        enabled = snapshot_only.get_active()
+        def work():
+            save_snapshot_mode(Path.home(), enabled)
+            return "播放模式已儲存；停止並重新開始播放後生效。NopeCHA 設定不變。"
+        task(work)
+    button = Gtk.Button(label="儲存快照播放模式")
+    button.connect("clicked", lambda _button: save_playback())
+    box.pack_start(button, False, False, 0)
+    buttons.append(button)
+    solver_enabled = Gtk.CheckButton(label="啟用 NopeCHA（獨立於快照播放模式）")
+    box.pack_start(solver_enabled, False, False, 0)
+    solver_key = Gtk.Entry()
+    solver_key.set_visibility(False)
+    solver_key.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+    solver_key.set_placeholder_text("NopeCHA API Key；留空保留原金鑰")
+    solver_key.set_max_length(512)
+    box.pack_start(solver_key, False, False, 0)
+    solver_status = Gtk.Label()
+    solver_status.set_line_wrap(True)
+    box.pack_start(solver_status, False, False, 0)
+    try:
+        state = nopecha_status(Path.home())
+        solver_enabled.set_active(state["enabled"])
+        solver_status.set_text("API Key 已儲存（不顯示內容）" if state["hasKey"] else
+                               "尚未設定 API Key；無金鑰時使用服務允許的免費額度。")
+    except SetupError as error:
+        solver_status.set_text(str(error))
+    note = Gtk.Label(label="背景更新下輪生效；即時搜尋須重新開始播放。付費金鑰可能消耗額度。")
+    note.set_line_wrap(True)
+    box.pack_start(note, False, False, 0)
+    box.pack_start(Gtk.LinkButton.new_with_label("https://nopecha.com/", "開啟 NopeCHA 帳號與 API Key 管理"),
+                   False, False, 0)
+
+    def save_solver(clear=False):
+        enabled = False if clear else solver_enabled.get_active()
+        key = solver_key.get_text()
+        solver_key.set_text("")
+        def saved():
+            solver_enabled.set_active(enabled)
+            solver_status.set_text("已清除金鑰並停用" if clear else "NopeCHA 設定已儲存")
+            return False
+        def work():
+            save_nopecha(Path.home(), enabled, key, clear=clear)
+            GLib.idle_add(saved)
+            return "NopeCHA 設定已儲存；背景下輪生效，即時搜尋須重新開始播放。"
+        task(work)
+
+    for label, clear in [("儲存 NopeCHA 設定", False), ("清除 NopeCHA API Key 並停用", True)]:
+        button = Gtk.Button(label=label)
+        button.connect("clicked", lambda _button, c=clear: save_solver(c))
         box.pack_start(button, False, False, 0)
         buttons.append(button)
     # Do not allow closing while a write is in progress. Before Save, closing

@@ -117,6 +117,7 @@ if (!app.requestSingleInstanceLock()) {
       ipcMain.handle("playback-config", () => ({
         videoURL: pathToFileURL(config.videoPath).href,
         startSeconds: config.startSeconds,
+        videoTint: config.videoTint,
       }));
       ipcMain.on("playback-status", (event, status) => {
         if (win && event.sender === win.webContents) {

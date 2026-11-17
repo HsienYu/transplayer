@@ -509,3 +509,15 @@ test("profile preparation failure never spawns a browser", async () => {
   await assert.rejects(new ChromeSession(f.options, f.deps).start(), /locked/i);
   assert(!f.calls.some(c => c[0] === "spawn"));
 });
+
+test('private configured solver path is allowed only for seed and disable wins', () => {
+  const { captchaExtensionDir } = load();
+  const os = require('node:os'), fs = require('node:fs'), path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tp-private-extension-'));
+  try {
+    const env = { TRANSPLAYER_NOPECHA_DIR: root, TRANSPLAYER_SEED: '1' };
+    assert.equal(captchaExtensionDir('/missing', env), root);
+    assert.equal(captchaExtensionDir('/missing', { ...env, TRANSPLAYER_SEED: '0' }), null);
+    assert.equal(captchaExtensionDir('/missing', { ...env, TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION: '1' }), null);
+  } finally { fs.rmSync(root, { recursive: true }); }
+});

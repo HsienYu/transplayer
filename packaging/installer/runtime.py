@@ -10,8 +10,8 @@ import sys
 import time
 from contextlib import contextmanager
 
-from core import (RELEASE, SetupError, _autostart, _dir, _owned_config,
-                  account_lock, load_owned, validate_video)
+from core import (RELEASE, SetupError, _autostart, _dir, _safe, _atomic, _owned_config,
+                  account_lock, load_owned, validate_video, snapshot_mode)
 
 LIB = Path("/usr/lib/transplayer")
 APP = Path(RELEASE["appdir"])
@@ -229,8 +229,6 @@ def _supervisor(home, action):
         if state == "stopped":
             run(pm2 + ["delete", "transplayer-r10"], env)
         run(pm2 + ["start", str(LIB / "ecosystem.config.cjs"), "--only", "transplayer-r10"], env)
-        if action == "login":
-            _spawn_seed(home)  # boot auto-login also refreshes the snapshot cache (best effort)
         return "start requested — inspect playback"
 
 
@@ -252,6 +250,8 @@ def play(home):
             # only added an on-screen NopeCHA bar plus Chrome's "developer mode
             # extensions" warning bar, so keep it off.
             "TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION": "1",
+            "TRANSPLAYER_SNAPSHOT_ONLY": "1" if snapshot_mode(home) else "0",
+            "TRANSPLAYER_VALIDATED_SNAPSHOTS": "1",
         })
         os.execve(APP / "runtime/electron", [str(APP / "runtime/electron"), str(APP / "app"),
             "--ozone-platform=x11", "--enable-transparent-visuals", "--disable-setuid-sandbox"], env)
@@ -266,6 +266,7 @@ def _seed_env(home):
         "TRANSPLAYER_DESKTOP_BACKEND": "gnome49",
         "TRANSPLAYER_BROWSER_BACKEND": "chrome-first",
         "TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION": "1",
+            "TRANSPLAYER_SNAPSHOT_ONLY": "1",
         "ELECTRON_RUN_AS_NODE": "1",
     })
     return env
@@ -285,6 +286,22 @@ def seed(home):
               [str(APP / "runtime/electron"), str(APP / "app/seed.js")], env)
 
 
+def prepare_seed_account(home):
+    profile = home / ".local/share/transplayer/profiles-r10-basic/seed-account"
+    current = home
+    for part in (".local", "share", "transplayer", "profiles-r10-basic", "seed-account"):
+        current = current / part
+        _dir(current, private=part in ("profiles-r10-basic", "seed-account"))
+    marker = profile / ".transplayer-profile"
+    purpose = "transplayer-exhibition-basic-v1\n"
+    _safe(marker)
+    if not any(profile.iterdir()):
+        _atomic(marker, purpose.encode())
+    elif not marker.is_file() or marker.read_text() != purpose or marker.stat().st_mode & 0o077:
+        raise SetupError("既有登入資料缺少專用標記；請由技術人員在隔離副本中移轉，不會自動接管。")
+    return profile
+
+
 def snapshot_login(home):
     """Open a visible Chrome on the persistent seed-account profile so the operator logs into
     a dedicated Google account once; the snapshot seed then uses it (a signed-in account gates
@@ -295,8 +312,7 @@ def snapshot_login(home):
     for k in ("DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"):
         if not env.get(k):
             raise SetupError("登入需要圖形桌面授權；請由桌面執行。")
-    profile = home / ".local/share/transplayer/profiles-r10-basic/seed-account"
-    profile.mkdir(parents=True, exist_ok=True)
+    profile = prepare_seed_account(home)
     subprocess.run([str(APP / "browser/chrome"), "--user-data-dir=" + str(profile),
                     "--ozone-platform=x11", "--password-store=basic", "--no-first-run",
                     "--no-default-browser-check", "--disable-blink-features=AutomationControlled",

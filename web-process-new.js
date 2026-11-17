@@ -11,6 +11,36 @@ require("events").EventEmitter.defaultMaxListeners = 100;
 //require("events").EventEmitter.prototype._maxListeners = 100;
 
 let controller = new Controller();
+const managedSnapshots = process.env && (process.env.TRANSPLAYER_VALIDATED_SNAPSHOTS === "1" ||
+  process.env.TRANSPLAYER_SNAPSHOT_ONLY === "1");
+let liveSolver;
+if (managedSnapshots && process.env.TRANSPLAYER_SNAPSHOT_ONLY !== "1") {
+  try {
+    liveSolver = require("./nopecha-settings").prepareNopecha({ home: require("os").homedir(),
+      source: require("path").join(__dirname, "nopecha"), root: controller.profileRoot() });
+    process.env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION = liveSolver.directory ? "0" : "1";
+    if (liveSolver.directory) {
+      process.env.TRANSPLAYER_NOPECHA_DIR = liveSolver.directory;
+      process.env.TRANSPLAYER_LIVE_SOLVER = "1";
+    }
+  } catch (_) {
+    process.env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION = "1";
+    console.error("NopeCHA unavailable for live search; using snapshot fallback");
+  }
+}
+const stopRefresh = managedSnapshots ? require("./seeder").startRefreshWorker() : async () => {};
+let liveCheckBusy = false;
+const liveCheck = managedSnapshots && process.env.TRANSPLAYER_SNAPSHOT_ONLY !== "1"
+  ? setInterval(async () => {
+    if (liveCheckBusy) return;
+    liveCheckBusy = true;
+    try {
+      for (const id of Object.keys(controller.browsers)) await controller.serveSnapshotIfGated(id);
+    } catch (_) { console.error("live fallback monitor failed"); }
+    finally { liveCheckBusy = false; }
+  }, 1000) : null;
+if (liveCheck) liveCheck.unref();
+
 
 let display_width = 2160;
 let display_height = 1920;
@@ -213,7 +243,7 @@ let task = {
       await controller.breakScroll(13);
       await controller.goTo(
         13,
-        "https://www.google.com/search?q=%20explosion&tbm=isch"
+        "https://www.google.com/search?q=explosion%20news&tbm=isch"
       );
       controller.scrollTo(13, 12000);
     },
@@ -259,7 +289,10 @@ let stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
+  if (liveCheck) clearInterval(liveCheck);
+  await stopRefresh();
   await controller.closeAllBrowser();
+  if (liveSolver) liveSolver.cleanup();
   process.exit(0);
 }
 process.on("SIGTERM", stop);

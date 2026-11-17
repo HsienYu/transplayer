@@ -61,14 +61,29 @@ class Controller {
   // ~1s at SCROLL_INTERVAL=10ms) so a mid-display gate swaps to the snapshot quickly.
   GATE_RECHECK_EVERY = 100;
 
+  // A window that arrived clean can momentarily fall below the image threshold when Google
+  // re-lays-out its grid -- e.g. an operator maximises the window -- which is NOT a block.
+  // Before swapping such a window to a snapshot, re-settle its images this long and re-check,
+  // so a transient reload is not mistaken for a gate and the live view is kept.
+  RESIZE_RESETTLE_MS = 2500;
+  RESIZE_RESETTLE_STABLE_MS = 600;
+
   // Detects a Google abuse/CAPTCHA page from its content (runs in the page).
-  static GATE_CHECK_JS = "(function(){try{" +
-    "if(location.pathname.indexOf('/sorry')===0)return true;" +
-    "if(document.querySelector('iframe[src*=\"recaptcha\"]'))return true;" +
-    "var t=(document.body&&document.body.innerText)||'';" +
-    "if(t.indexOf('unusual traffic')>=0)return true;" +
-    "if(t.indexOf('not a robot')>=0)return true;" +
-    "return false;}catch(e){return false;}})()";
+  static GATE_CHECK_JS = `(() => {
+    function visit(doc, depth) {
+      if (depth > 8) return true;
+      const text = ((doc.body && doc.body.innerText) || '').toLowerCase();
+      if (/unusual traffic|not a robot|不是機器人|異常流量/.test(text)) return true;
+      for (const frame of doc.querySelectorAll('iframe,frame')) {
+        if (/recaptcha|\\/sorry(?:\\/|[?#]|$)/i.test(frame.src || '')) return true;
+        try { if (frame.contentDocument && visit(frame.contentDocument, depth + 1)) return true; }
+        catch (_) { /* Cross-origin frames are checked again in the captured MIME artifact. */ }
+      }
+      return false;
+    }
+    try { return location.pathname.indexOf('/sorry') === 0 || visit(document, 0); }
+    catch (_) { return true; }
+  })()`;
 
   // Count real image-result thumbnails (positive clean signal); -1 on any page error.
   static CLEAN_CHECK_JS = "(function(){try{" +
@@ -87,6 +102,8 @@ class Controller {
   constructor() {
     /** @type {Object.<number, {driver: WebDriver|null, scrollState: number, pid: number}>} */
     this.browsers = {};
+    this.validatedSnapshots = process.env.TRANSPLAYER_VALIDATED_SNAPSHOTS === "1";
+    this.snapshotOnly = process.env.TRANSPLAYER_SNAPSHOT_ONLY === "1";
 
     /** @type {boolean} default is true */
     this.useLocalProfile = true;
@@ -108,7 +125,7 @@ class Controller {
   }
 
   snapshotRoot() {
-    return path.join(this.profileRoot(), "snapshots");
+    return path.join(this.profileRoot(), (this.snapshotOnly || this.validatedSnapshots) ? "snapshots-validated" : "snapshots");
   }
 
   // Start every run with fresh display profiles (production only). A flagged, long-lived se_*
@@ -149,6 +166,8 @@ class Controller {
 
   writeSnapshot(url, data) {
     if (typeof data !== "string" || data.length < this.SNAPSHOT_MIN_BYTES) return false;
+    if ((this.validatedSnapshots || this.snapshotOnly) &&
+        !require("./seeder").snapshotArtifactQuality(data).clean) return false;
     const target = this.snapshotPath(url);
     fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
     const temp = target + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
@@ -224,11 +243,43 @@ class Controller {
   }
 
   // Capture the current clean page of a window, refreshing its cached snapshot once per run.
+  async livePageReady(driver) {
+    try {
+      if (!(await this.isCleanResults(driver))) return false;
+      const state = await driver.executeScript(require("./seeder").QUALITY_JS);
+      return state.loaded >= this.IMAGE_RESULT_MIN && state.pending === 0;
+    } catch (_) { return false; }
+  }
+
+  async useValidatedFallback(id, url, driver) {
+    this._clearCapture(id);
+    if (!this.hasSnapshot(url)) { await driver.get("about:blank"); return false; }
+    await driver.get("file://" + this.snapshotPath(url));
+    this._recordServed(id, url);
+    return true;
+  }
+
   async maybeCapture(id) {
+    if (this.snapshotOnly) return;
     const entry = this.browsers[id];
     if (!entry || !entry.captureUrl || !entry.session ||
         typeof entry.session.captureSnapshot !== "function") return;
     const url = entry.captureUrl;
+    if (this.validatedSnapshots) {
+      entry.captureUrl = null;
+      try {
+        const { QUALITY_JS, captureQuality } = require("./seeder");
+        const inspect = async () => ({ ...(await entry.driver.executeScript(QUALITY_JS)),
+          gated: !(await this.isCleanResults(entry.driver)) });
+        const before = await inspect();
+        const requirement = require("./queries").requirementFor(url);
+        if (!captureQuality(before, requirement)) return;
+        const data = await entry.session.captureSnapshot();
+        if (!captureQuality(await inspect(), requirement)) return;
+        this.writeSnapshotIfRicher(url, data, before.loaded);
+      } catch (_) { console.error("validated display snapshot capture failed"); }
+      return;
+    }
     entry.captureUrl = null; // one-shot per clean navigation
     if (this.refreshedSnapshots.has(url)) return; // already refreshed this run
     // Only cache a confirmed, populated image-results page; fail closed (grey/gated/error -> skip)
@@ -273,6 +324,7 @@ class Controller {
   // scroll/interaction). If the window is now gated and we have a snapshot for the query it
   // is showing, swap to the latest snapshot rather than leave a CAPTCHA on the display.
   async serveSnapshotIfGated(id) {
+    if (this.snapshotOnly) return false;
     const entry = this.browsers[id];
     if (!entry || !entry.driver || !entry.captureUrl) return false;
     const url = entry.captureUrl;
@@ -280,7 +332,36 @@ class Controller {
       // Positive check: a window that loaded clean should still be a real image-results page.
       // If it no longer is (an inline reCAPTCHA / grey / blocked page has ~0 thumbnails, and
       // isGated also catches /sorry/ and known markers), swap to the query's latest snapshot.
+      if (this.validatedSnapshots) {
+        // Keep the live view by the DISPLAY bar (isCleanResults: not gated AND >= IMAGE_RESULT_MIN
+        // images), NOT the stricter livePageReady (which also requires pending === 0). A live grid
+        // lazy-loads more thumbnails while it scrolls or after a maximise, so pending is often > 0
+        // on a perfectly good page; requiring pending === 0 here needlessly dropped it to a snapshot.
+        // livePageReady stays the bar for CAPTURE (maybeCapture), where a fully-settled page matters.
+        if (await this.isCleanResults(entry.driver)) return false;
+        if (entry.captureUrl !== url) return false;
+        // Resize guard: a window momentarily below the image threshold but NOT gated (its grid is
+        // re-laying-out after a maximise) is re-settled and re-checked before falling back.
+        if (!(await this.isGated(entry.driver))) {
+          await this.waitImagesSettled(entry.driver,
+            { timeoutMs: this.RESIZE_RESETTLE_MS, stableMs: this.RESIZE_RESETTLE_STABLE_MS });
+          if (!this.browsers[id] || this.browsers[id].captureUrl !== url) return false;
+          if (await this.isCleanResults(entry.driver)) return false;
+        }
+        await this.useValidatedFallback(id, url, entry.driver);
+        return true;
+      }
       if (await this.isCleanResults(entry.driver)) return false;
+      // Not a clean results page. Only a genuine gate justifies dropping the live view; a
+      // window mid-reload after a resize is transiently below the image threshold but NOT
+      // gated -- re-settle its images and re-check before falling back, so the live view is
+      // not swapped to a snapshot just because the grid is still re-laying-out.
+      if (!(await this.isGated(entry.driver))) {
+        await this.waitImagesSettled(entry.driver,
+          { timeoutMs: this.RESIZE_RESETTLE_MS, stableMs: this.RESIZE_RESETTLE_STABLE_MS });
+        if (!this.browsers[id] || this.browsers[id].captureUrl !== url) return false;
+        if (await this.isCleanResults(entry.driver)) return false;
+      }
       if (!this.hasSnapshot(url)) return false;
       await entry.driver.get("file://" + this.snapshotPath(url));
       this._clearCapture(id);
@@ -293,6 +374,7 @@ class Controller {
   // Always show the freshest snapshot: if the seed writes a newer page for the query a
   // window is serving (e.g. the boot seed finishing after the display started), reload it.
   async refreshServedSnapshotIfNewer(id) {
+    if (this.snapshotOnly || this.validatedSnapshots) return false;
     const entry = this.browsers[id];
     if (!entry || !entry.driver || !entry.servedSnapshot) return false;
     const { url } = entry.servedSnapshot;
@@ -725,6 +807,33 @@ class Controller {
       //     await this.breakScroll(id);
       // }//
 
+      this._clearCapture(theId);
+      if (this.snapshotOnly) {
+        this._clearCapture(theId);
+        if (!this.hasSnapshot(theUrl)) {
+          console.error(`snapshot unavailable id=${theId}`);
+          await driver.get("about:blank");
+          return false;
+        }
+        await driver.get("file://" + this.snapshotPath(theUrl));
+        this._recordServed(theId, theUrl);
+        return true;
+      }
+
+      if (this.validatedSnapshots) {
+        try {
+          await driver.get(theUrl);
+          await this.waitImagesSettled(driver);
+          // Show live by the DISPLAY bar (isCleanResults: not gated AND >= IMAGE_RESULT_MIN loaded),
+          // tolerant of pending > 0 -- a big live grid (e.g. the maximised background window) always
+          // has thumbnails still lazy-loading, so the stricter livePageReady (pending===0) wrongly
+          // fell back to a snapshot even on a clean, un-gated page (measured: gated=false loaded=59
+          // pending=41). _markCapture still arms maybeCapture (which self-gates on full load) and the
+          // mid-display serveSnapshotIfGated protection.
+          if (await this.isCleanResults(driver)) { this._markCapture(theId, theUrl); return true; }
+        } catch (_) { console.error("live search failed; using validated fallback"); }
+        return await this.useValidatedFallback(theId, theUrl, driver);
+      }
       await driver.get(theUrl);
       if (await this.isGated(driver)) {
         // Prefer a cached snapshot over ever showing the CAPTCHA page.

@@ -6,8 +6,12 @@
     <title>Transplayer</title>
   </head>
   <body style="margin: 0; overflow: hidden; background: transparent">
+    <!-- A light translucent layer BELOW the video: where the video is transparent it shows
+         through onto the browser behind, lowering the browser image's chroma. Colour is set
+         from config.videoTint by index.js; this inline value is the fallback. -->
+    <div id="tint" style="position: fixed; inset: 0; z-index: 0; pointer-events: none; background: rgba(230,230,230,0.12);"></div>
     <video id="vid" playsinline loop preload="auto"
-      style="position: fixed; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill;"></video>
+      style="position: fixed; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill; z-index: 1;"></video>
     <script src="../node_modules/osc-js/lib/osc.min.js"></script>
     <script src="index.js"></script>
   </body>

@@ -1,6 +1,6 @@
 {
   "release": "r10",
-  "version": "1.1.0~rc13",
+  "version": "1.1.0~rc19",
   "appdir": "/opt/transplayer/releases/r10.AppDir",
   "platform": "Ubuntu 26.04 LTS amd64",
   "gnome": 50,
@@ -8,5 +8,5 @@
   "extensionUuid": "transplayer-desktop@transplayer.local",
   "node": "24.22.2",
   "pm2": "7.1.1",
-  "status": "RC — rc13: (A) account login — transplayer snapshot-login (and a button in the settings GUI) opens Chrome on a persistent seed-account profile for a one-time Google login; the snapshot seed then uses that logged-in profile first (a signed-in account gates far less), falling back to fresh throwaway profiles. Use a dedicated/throwaway account, never personal. Plus robust mid-display gating: serveSnapshotIfGated now uses the positive isCleanResults check (any non-results page — inline reCAPTCHA / grey / blank — swaps to the latest snapshot, not just /sorry/), checked every ~1s."
+  "status": "RC — 獨立快照播放與 NopeCHA 開關；定時更新完整快照。實機驗收進行中。"
 }

@@ -290,7 +290,8 @@ function bounded(promise, milliseconds, label) {
 // developer-mode warning bubble under --disable-infobars.
 function captchaExtensionDir(baseDir, env) {
   if (env && env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION === "1") return null;
-  const dir = path.join(baseDir, "nopecha");
+  const dir = env && (env.TRANSPLAYER_SEED === "1" || env.TRANSPLAYER_LIVE_SOLVER === "1") && env.TRANSPLAYER_NOPECHA_DIR
+    ? env.TRANSPLAYER_NOPECHA_DIR : path.join(baseDir, "nopecha");
   try { if (fs.statSync(dir).isDirectory()) return dir; } catch (_) { /* not shipped */ }
   return null;
 }

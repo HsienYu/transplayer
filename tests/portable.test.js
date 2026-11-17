@@ -39,6 +39,25 @@ test("configuration resolves media relative to the external config, not cwd", (t
   assert.equal(config.startSeconds, 775);
   assert.equal(config.expectedWidth, 2160);
   assert.equal(config.expectedHeight, 1920);
+  assert.equal(config.videoTint, "rgba(230,230,230,0.12)"); // near-white wash on by default
+});
+
+test("videoTint defaults to a near-white wash, accepts safe colours, rejects unsafe ones", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "transplayer-test-"));
+  t.after(() => fs.rmSync(dir, { recursive: true }));
+  const filename = path.join(dir, "config.json");
+  fs.writeFileSync(path.join(dir, "v.webm"), "synthetic fixture");
+  const write = (d) => fs.writeFileSync(filename, JSON.stringify(Object.assign({ videoPath: "v.webm" }, d)));
+  write({});
+  assert.equal(loadConfig(filename).videoTint, "rgba(230,230,230,0.12)");
+  for (const c of ["rgba(230,230,230,0.12)", "rgb(200,200,200)", "#cccccc", "#ccc", "transparent", "rgba(0,0,0,0)"]) {
+    write({ videoTint: c });
+    assert.equal(loadConfig(filename).videoTint, c, `should accept ${c}`);
+  }
+  for (const c of ["red", "rgba(0,0,0,0); background:url(x)", "url(evil)", "expression(1)", "", 5, "#ggg"]) {
+    write({ videoTint: c });
+    assert.throws(() => loadConfig(filename), /videoTint/, `should reject ${JSON.stringify(c)}`);
+  }
 });
 
 test("missing media, malformed configuration and hostile paths are rejected", (t) => {

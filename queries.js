@@ -15,6 +15,19 @@ module.exports = [
   "https://www.google.com/search?q=history%20and%20ethnography%20museum&tbm=isch",
   "https://www.google.com/search?q=history%20gunpowder&tbm=isch",
   "https://www.google.com/search?q=gunpowder%20explosion&tbm=isch",
-  "https://www.google.com/search?q=%20explosion&tbm=isch",
+  "https://www.google.com/search?q=explosion%20news&tbm=isch",
   "https://www.google.com/search?q=world%20news&tbm=isch&tbs=qdr:d",
 ];
+
+// Outer window dimensions and requested scroll distance, verified against the timeline.
+module.exports.requirements = [
+  [1620,1620,9000], [2204,1964,9000], [1620,1620,9000], [2204,1964,9000],
+  [1670,1750,9000], [2204,1964,9000], [1930,1800,9000], [2204,1964,9000],
+  [1830,1800,9000], [2204,1964,12000], [2100,1600,9000], [2204,1964,12000],
+  [2204,1964,9000],
+].map(([width,height,scroll]) => ({width,height,scroll}));
+module.exports.requirementFor = url => {
+  const index = module.exports.indexOf(url);
+  if (index < 0) throw new Error('Unknown snapshot query');
+  return module.exports.requirements[index];
+};

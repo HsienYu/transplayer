@@ -12,10 +12,12 @@ Video timecodes drive live image-search windows, placement and scrolling.
 需要兩台各 1080×1920 直向螢幕、左右延伸、縮放 100%，以及另外取得的原作品影片。
 ARM、其他桌面與其他 Ubuntu 版本未列為新安裝支援平台。
 
-**正式安裝平台為 Ubuntu 26.04。** 目前套件版本 `1.1.0~rc8`，已在參考展場機（MSI MS-7D17／RTX 4060）
-完成安裝、重開機與自動播放驗證（掉影格 0），具可安裝的 `.deb`。rc8 另修正：視窗 13 全螢幕背景
-鋪滿整個桌面（補償 GTK 視窗陰影）、停用 NopeCHA 擴充功能的警示 bar；新機安裝需先關閉桌面 dock 佔位
-（見手冊）。藝術家／美術館自助安裝流程見
+**正式安裝平台為 Ubuntu 26.04。** 目前套件版本 `1.1.0~rc19`，已在參考展場機（MSI MS-7D17／RTX 4060）
+完成安裝、重開機與自動播放驗證（掉影格 0），具可安裝的 `.deb`。rc9–rc19 的重點：以乾淨快照快取
+因應 Google reCAPTCHA（被擋時顯示已驗證的乾淨快照、沒被擋時顯示即時搜尋並擇優更新快取）、修正嵌入式
+CAPTCHA 造成的灰畫面、可調的影片下方淡灰降彩度圖層（設定 `videoTint`）、以及「背景視窗自動放大後仍保持
+即時」的顯示判斷修正。視窗 13 全螢幕背景鋪滿整個桌面（補償 GTK 視窗陰影）、停用 NopeCHA 擴充功能的警示
+bar；新機安裝需先關閉桌面 dock 佔位（見手冊）。藝術家／美術館自助安裝流程見
 [安裝與操作手冊](docs/user-guide.md)。
 轉為長期展出前仍待補：長時間 soak 測試與發行前授權／漏洞／lintian 稽核（由技術人員處理）。
 自助安裝不需 Git、Node 開發環境或手動編輯 JSON。
@@ -27,10 +29,10 @@ Ubuntu 25.10 已停止支援，但請**勿**因此自行就地升級正在播放
 
 請先閱讀[安裝與操作手冊](docs/user-guide.md)：給新手的逐步流程，涵蓋準備影片與螢幕、
 核對並安裝 `.deb`、影片檔案位置、首次設定、開始／停止、自啟、更新與移除。
-自 [GitHub Release v1.1.0-rc8](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc8)
-下載 `transplayer_1.1.0.rc8_amd64.deb`（GitHub 會把版本號的 `~` 顯示成 `.`，套件內版本仍是
-`1.1.0~rc8`），或向專案索取同一檔案；安裝前先核對其 SHA-256
-（`5a919d05a08bc6b31770f5d02067a2ed2a6e320eef0680a9b79632c18884a0a5`，Release 頁亦有列）。
+自 [GitHub Release v1.1.0-rc19](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc19)
+下載 `transplayer_1.1.0.rc19_amd64.deb`（GitHub 會把版本號的 `~` 顯示成 `.`，套件內版本仍是
+`1.1.0~rc19`），或向專案索取同一檔案；安裝前先核對其 SHA-256
+（`a6359da5392ee60c8bcd6bb877068af0c5bf3b5bf4d9e802613b779fde978263`，Release 頁亦有列）。
 不要把 clone 原始碼或 staging tree 當成安裝包。
 
 設定工具不自動登出／重開、修改 GDM／螢幕配置或索取密碼。
@@ -54,3 +56,13 @@ npm test
 
 詳見[開發指南](docs/development.md)。自動化測試不證明透明度、聲音、實體幾何、
 網站穩定性或展覽可用性；所有真正部署仍須有記錄的實機驗收。
+
+## Scheduled snapshot development
+
+The development change defaults to validated snapshot playback, with an independent live-search
+option. It refreshes searches on playback startup and one hour after each pass completes. Not deployed. See [operations](docs/operations.md)
+for first-cache preparation and [visual acceptance](tests/manual/scheduled-snapshots.md).
+
+The development settings window also provides an optional NopeCHA switch, masked API-key
+entry, key removal and an official account-management link. It affects background captures starting with the next pass and live-search windows
+after playback restarts. Snapshot-only playback has its own independent switch. See operations for private storage and manual validation.

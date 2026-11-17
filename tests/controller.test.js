@@ -1,3 +1,4 @@
+const acceptedMhtml = 'MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=x\r\n\r\n--x\r\nContent-Type: text/html\r\n\r\n<body>' + 'M'.repeat(200000) + '</body>\r\n--x--\r\n';
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
@@ -10,6 +11,8 @@ function controllerClass(overrides = {}) {
     __dirname: path.resolve(__dirname, ".."),
     require(name) {
       if (overrides.modules && name in overrides.modules) return overrides.modules[name];
+      if (name === "./seeder") return require("../seeder");
+      if (name === "./queries") return require("../queries");
       if (name === "selenium-webdriver") return {};
       if (name === "selenium-webdriver/chrome") {
         return { ServiceBuilder: class {}, Options: class {} };
@@ -516,9 +519,92 @@ test("serveSnapshotIfGated swaps an inline-reCAPTCHA / blank page (few images, n
   fsReal.mkdirSync(path.dirname(snap), { recursive: true });
   fsReal.writeFileSync(snap, "M".repeat(200000));
   const d = servingDriver({ gated: false, images: 2 }); // not /sorry/, no gate marker, but ~0 results
+  f.controller.waitImagesSettled = async () => {}; // images stay few after re-settle -> still a real empty page
   f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
   assert.equal(await f.controller.serveSnapshotIfGated(13), true);
   assert.deepEqual(d.calls.get, ["file://" + snap]);
+});
+
+test("serveSnapshotIfGated keeps a live window that recovers after a resize re-settle (not gated)", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=resize&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  let images = 2; // transiently below threshold while the grid re-lays-out after a maximise
+  const calls = { get: [] };
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return "https://www.google.com/search?q=resize&udm=2"; },
+    async executeScript(s) { return String(s).includes("img[src") ? images : false; },
+  };
+  f.controller.waitImagesSettled = async () => { images = 500; }; // grid finishes loading
+  f.controller.browsers[13] = { captureUrl: url, driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), false); // kept live, not swapped
+  assert.deepEqual(calls.get, []);                                  // no snapshot served
+});
+
+test("serveSnapshotIfGated falls back on a genuine gate without wasting time re-settling", async () => {
+  const f = snapFixture();
+  const url = "https://www.google.com/search?q=gate&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  let resettled = false;
+  f.controller.waitImagesSettled = async () => { resettled = true; };
+  const d = servingDriver({ gated: true, images: 2 }); // GATE_CHECK_JS -> true
+  f.controller.browsers[13] = { captureUrl: url, driver: d.driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), true);
+  assert.equal(resettled, false, "a genuinely gated page must not re-settle");
+  assert.deepEqual(d.calls.get, ["file://" + snap]);
+});
+
+test("serveSnapshotIfGated (validated mode) keeps live when readiness recovers after a resize re-settle", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=vresize&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  let ready = false; // grid still re-laying-out after a maximise; not gated
+  const calls = { get: [] };
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return "https://www.google.com/search?q=vresize&udm=2"; },
+    async executeScript() { return false; }, // GATE_CHECK_JS -> not gated
+  };
+  f.controller.isCleanResults = async () => ready; // display bar: not gated + enough images
+  f.controller.waitImagesSettled = async () => { ready = true; }; // grid finishes loading
+  f.controller.browsers[13] = { captureUrl: url, driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), false); // kept live, not swapped
+  assert.deepEqual(calls.get, []);
+});
+
+test("serveSnapshotIfGated (validated mode) keeps a live page that has >=25 images but is still lazy-loading (pending>0)", async () => {
+  // Regression: a scrolling/maximised live grid keeps loading thumbnails (pending>0) yet is a
+  // perfectly good display; it must stay live and NOT be swapped to a snapshot. The display
+  // decision uses isCleanResults (not gated + >=IMAGE_RESULT_MIN loaded), not the stricter
+  // livePageReady (which additionally needs pending===0).
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=worldnews&tbm=isch";
+  const snap = f.controller.snapshotPath(url);
+  fsReal.mkdirSync(path.dirname(snap), { recursive: true });
+  fsReal.writeFileSync(snap, "M".repeat(200000));
+  // Not gated, 100 loaded images, but QUALITY_JS reports pending>0 (so livePageReady would be false).
+  const calls = { get: [] };
+  const driver = {
+    async get(u) { calls.get.push(u); },
+    async getCurrentUrl() { return "https://www.google.com/search?q=worldnews&udm=2"; },
+    async executeScript(s) {
+      if (String(s).includes("img[src")) return 100;      // CLEAN_CHECK_JS -> 100 loaded
+      if (String(s).includes("pending")) return { loaded: 100, pending: 8 }; // QUALITY_JS
+      return false;                                        // GATE_CHECK_JS -> not gated
+    },
+  };
+  f.controller.browsers[13] = { captureUrl: url, driver };
+  assert.equal(await f.controller.serveSnapshotIfGated(13), false); // kept live despite pending>0
+  assert.deepEqual(calls.get, []);
 });
 
 test("refreshServedSnapshotIfNewer reloads when the seed has written a newer snapshot", async () => {
@@ -619,4 +705,96 @@ test("every controller operation used by the live timeline remains available", (
   for (const name of new Set(calls)) {
     assert.equal(typeof Controller.prototype[name], "function", name);
   }
+});
+
+test('snapshot-only navigation never requests the live search and missing cache fails closed', async () => {
+  const f = snapFixture(); f.controller.snapshotOnly = true;
+  assert.equal(await f.controller.goTo(13, REQUEST_URL), false);
+  assert.deepEqual(f.calls.get, ['about:blank']);
+  f.controller.writeSnapshot(REQUEST_URL, acceptedMhtml);
+  assert.equal(await f.controller.goTo(13, REQUEST_URL), true);
+  assert.equal(f.calls.get[1], 'file://' + f.controller.snapshotPath(REQUEST_URL));
+});
+test('snapshot-only mode does not replace a page during scrolling or capture the display', async () => {
+  const f = snapFixture(); f.controller.snapshotOnly = true;
+  f.controller.browsers[13] = { captureUrl: REQUEST_URL, driver: captureDriver(),
+    session: { captureSnapshot: async () => { throw Error('display must not capture'); } },
+    servedSnapshot: { url: REQUEST_URL, mtime: 0 } };
+  f.controller.writeSnapshot(REQUEST_URL, acceptedMhtml);
+  await f.controller.refreshServedSnapshotIfNewer(13);
+  await f.controller.maybeCapture(13);
+  assert.deepEqual(f.calls.get, []);
+  assert.equal(f.controller.refreshedSnapshots.size, 0);
+});
+test('snapshot-only mode cannot trust legacy snapshots accepted with weak quality checks', () => {
+  const f = snapFixture();
+  f.controller.writeSnapshot(REQUEST_URL, acceptedMhtml);
+  f.controller.snapshotOnly = true;
+  assert.equal(f.controller.hasSnapshot(REQUEST_URL), false);
+});
+
+test('validated live mode falls back on blocked and failed navigation; missing cache blanks', async () => {
+  for (const cached of [false, true]) {
+    for (const failure of ['gate', 'network']) {
+      const f = snapFixture(); f.controller.validatedSnapshots = true;
+      if (cached) f.controller.writeSnapshot(REQUEST_URL, acceptedMhtml);
+      f.controller.livePageReady = async () => false;
+      f.controller.waitImagesSettled = async () => 0;
+      const get = f.driver.get;
+      f.driver.get = async url => { if (failure === 'network' && url === REQUEST_URL) throw Error('offline'); await get(url); };
+      assert.equal(await f.controller.goTo(13, REQUEST_URL), cached);
+      assert.equal(f.calls.get.at(-1), cached ? 'file://' + f.controller.snapshotPath(REQUEST_URL) : 'about:blank');
+    }
+  }
+});
+
+test("validated goTo shows the live page when clean with >=25 images even if pending>0 (big maximised grid)", async () => {
+  // Measured failure: a maximised live grid reported gated=false loaded=59 pending=41 at goTo, yet
+  // the strict livePageReady (pending===0) fell it back to a snapshot. goTo must show live by the
+  // DISPLAY bar (isCleanResults), and arm capture (which self-gates on full load).
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  f.controller.waitImagesSettled = async () => 100;
+  f.controller.browsers[13] = {}; // so _markCapture can record captureUrl
+  const url = "https://www.google.com/search?q=worldnews&tbm=isch";
+  f.driver.executeScript = async (s) => {
+    if (String(s).includes("img[src")) return 100;                 // CLEAN_CHECK_JS -> 100 loaded
+    if (String(s).includes("pending")) return { loaded: 100, pending: 41 }; // QUALITY_JS
+    return false;                                                  // GATE_CHECK_JS -> not gated
+  };
+  assert.equal(await f.controller.goTo(13, url), true);
+  assert.deepEqual(f.calls.get, [url]);                 // showed live; did NOT serve a file:// snapshot
+  assert.equal(f.controller.browsers[13].captureUrl, url); // armed for capture + mid-display protection
+});
+test('validated live and snapshot-only modes share the accepted cache', () => {
+  const f = snapFixture(); f.controller.validatedSnapshots = true;
+  f.controller.writeSnapshot(REQUEST_URL, acceptedMhtml);
+  f.controller.snapshotOnly = true;
+  assert(f.controller.hasSnapshot(REQUEST_URL));
+});
+test('validated live readiness rejects incomplete and broken pages while accepting loaded results', async () => {
+  const f = snapFixture(); f.controller.isCleanResults = async () => true;
+  // VM controller dependencies resolve relative to this test; inject production policy module.
+  const C = controllerClass({ modules: { './seeder': require('../seeder') } });
+  const c = new C(); c.isCleanResults = async () => true;
+  assert.equal(await c.livePageReady({ executeScript: async () => ({ loaded: 120, pending: 0 }) }), true);
+  assert.equal(await c.livePageReady({ executeScript: async () => ({ loaded: 120, pending: 1 }) }), false);
+  assert.equal(await c.livePageReady({ executeScript: async () => { throw Error('gone'); } }), false);
+});
+
+test('validated writer refuses a nested challenge and retains the prior accepted archive', () => {
+  const f=snapFixture();f.controller.validatedSnapshots=true;
+  assert.equal(f.controller.writeSnapshot(REQUEST_URL,acceptedMhtml),true);
+  const before=fsReal.readFileSync(f.controller.snapshotPath(REQUEST_URL),'utf8');
+  const hostile=acceptedMhtml.replace('--x--','--x\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n'+Buffer.from('<body>unusual traffic</body>').toString('base64')+'\r\n--x--');
+  assert.equal(f.controller.writeSnapshot(REQUEST_URL,hostile),false);
+  assert.equal(fsReal.readFileSync(f.controller.snapshotPath(REQUEST_URL),'utf8'),before);
+});
+test('page challenge check includes archived child documents and sorry frame URLs', () => {
+  const C=controllerClass();
+  function doc(text='',frames=[]) { return {body:{innerText:text},querySelectorAll:()=>frames}; }
+  const check=document=>vm.runInNewContext(C.GATE_CHECK_JS,{document,location:{pathname:'/search'}});
+  assert.equal(check(doc('Image results')),false);
+  assert.equal(check(doc('Images',[{src:'cid:frame',contentDocument:doc('Our systems have detected unusual traffic')} ])),true);
+  assert.equal(check(doc('Images',[{src:'https://www.google.com/sorry/index',contentDocument:null}])),true);
 });

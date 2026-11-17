@@ -19,14 +19,24 @@ function canvasBounds(displays) {
 function loadConfig(filename) {
   if (!filename) throw new Error("TRANSPLAYER_CONFIG must name an external JSON file");
   const input = JSON.parse(fs.readFileSync(filename, "utf8"));
-  const allowed = ["videoPath", "startSeconds", "expectedWidth", "expectedHeight"];
+  const allowed = ["videoPath", "startSeconds", "expectedWidth", "expectedHeight", "videoTint"];
   if (!input || Array.isArray(input) || Object.keys(input).some(k => !allowed.includes(k))) {
     throw new Error("Invalid configuration fields");
   }
-  const config = Object.assign({ startSeconds: 775, expectedWidth: 2160, expectedHeight: 1920 }, input);
+  // videoTint: a light translucent layer the renderer paints BELOW the video (over the
+  // browser that shows through the transparent video) to lower the browser image's chroma.
+  // Default is a near-white ~12% wash; set "transparent" to disable. Restricted to a safe
+  // CSS colour so the value can never inject other declarations via style.background.
+  const config = Object.assign(
+    { startSeconds: 775, expectedWidth: 2160, expectedHeight: 1920, videoTint: "rgba(230,230,230,0.12)" },
+    input);
   if (typeof config.videoPath !== "string" || !config.videoPath ||
       config.videoPath.includes("\0") || /^[a-z]+:\/\//i.test(config.videoPath)) {
     throw new Error("videoPath must be a local file");
+  }
+  if (typeof config.videoTint !== "string" ||
+      !/^(transparent|#[0-9a-fA-F]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/.test(config.videoTint)) {
+    throw new Error("videoTint must be a plain CSS colour (hex, rgb/rgba, or transparent)");
   }
   if (!Number.isFinite(config.startSeconds) || config.startSeconds < 0 ||
       !Number.isInteger(config.expectedWidth) || config.expectedWidth <= 0 ||

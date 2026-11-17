@@ -13,7 +13,7 @@ const fs = require("fs");
 const { ChromeSession } = require("./chrome-session");
 const Controller = require("./controller");
 const queries = require("./queries");
-const { SnapshotSeeder } = require("./seeder");
+const { SnapshotSeeder, captureQuality } = require("./seeder");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PROFILE_ROOT = process.env.TRANSPLAYER_PROFILE_DIR ||
@@ -34,6 +34,27 @@ async function scrollToLoad(driver) {
   await sleep(800);
 }
 
+let activeSession;
+let ownedLock;
+let solver;
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { if (activeSession) await activeSession.close(); }
+  catch (error) { console.error("seed shutdown", error.message); }
+  if (solver) solver.cleanup();
+  if (ownedLock) { try { fs.rmdirSync(ownedLock); } catch (error) { console.error("seed lock cleanup", error.message); } }
+  process.exit(0);
+}
+
+const { QUALITY_JS } = require("./seeder");
+async function inspectQuality(driver, controller) {
+  const state = await driver.executeScript(QUALITY_JS);
+  state.gated = !(await controller.isCleanResults(driver));
+  return state;
+}
+
 async function main() {
   if (!CHROME || !DRIVER) {
     console.error("seed: TRANSPLAYER_CHROME / TRANSPLAYER_DRIVER not set");
@@ -41,6 +62,27 @@ async function main() {
   }
   const controller = new Controller(); // only for isCleanResults / writeSnapshot / snapshotPath
   const seedProfiles = [];
+  const strict = process.env.TRANSPLAYER_SNAPSHOT_ONLY === "1";
+  // Shared lock prevents manual/boot/scheduled seed processes from racing cache writes.
+  const lock = path.join(PROFILE_ROOT, "snapshot-seed.lock");
+  fs.mkdirSync(PROFILE_ROOT, { recursive: true, mode: 0o700 });
+  try { fs.mkdirSync(lock, { mode: 0o700 }); }
+  catch (error) {
+    if (error.code === "EEXIST") { console.error("seed already running or stale lock; skipping"); return 1; }
+    throw error;
+  }
+  ownedLock = lock;
+  try {
+  try {
+    solver = require("./nopecha-settings").prepareNopecha({ home: os.homedir(),
+      source: path.join(__dirname, "nopecha"), root: PROFILE_ROOT });
+  } catch (_) {
+    console.error("NopeCHA unavailable: check private settings and installed automation extension");
+    solver = { directory: null, cleanup() {} };
+  }
+  process.env.TRANSPLAYER_DISABLE_CAPTCHA_EXTENSION = solver.directory ? "0" : "1";
+  if (solver.directory) process.env.TRANSPLAYER_NOPECHA_DIR = solver.directory;
+
 
   const ACCOUNT = path.join(PROFILE_ROOT, "seed-account");
   const makeSession = async (n) => {
@@ -52,24 +94,35 @@ async function main() {
       profileDir = ACCOUNT;
       console.log("seed using logged-in account profile");
     } else {
-      profileDir = path.join(PROFILE_ROOT, `seed-${n}`);
+      profileDir = fs.mkdtempSync(path.join(PROFILE_ROOT, "seed-run-"));
       seedProfiles.push(profileDir);
-      try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { /* fresh */ }
+
     }
     // Launch offscreen (beyond the 2160-wide desktop) so a boot-time seed never flashes
     // over the artwork; the probe also setRects as a fallback.
-    return new ChromeSession({ chromePath: CHROME, driverPath: DRIVER, profileDir, env: process.env,
-      extraArgs: ["--window-position=4000,0", "--window-size=1280,900"] });
+    activeSession = new ChromeSession({ chromePath: CHROME, driverPath: DRIVER, profileDir, env: process.env,
+      extraArgs: ["--window-position=4000,0", "--window-size=2204,1920"] });
+    return activeSession;
   };
 
   const probe = async (url, session) => {
     const driver = session.driver;
-    try { await driver.get(url); } catch (_) { return false; }
+    const requirement = queries.requirementFor(url);
+    const query = queries.indexOf(url) + 1;
+    console.log(`seed query=${query} begin`);
+    await driver.manage().setTimeouts({ pageLoad: 30000, script: 10000 });
+    try { await driver.get(url); } catch (_) { console.log(`seed query=${query} rejected=navigation`); return false; }
+    if (solver.directory && !(await require("./seeder").waitForClean({
+      check: () => controller.isCleanResults(driver),
+    }))) {
+      console.log(`seed query=${query} rejected=solver-deadline`);
+      return false;
+    }
     // Push the seed window offscreen (best effort) so a boot-time run is not visible.
-    try { await driver.manage().window().setRect({ x: 4000, y: 0, width: 1280, height: 900 }); }
+    try { await driver.manage().window().setRect({ x: 4000, y: 0, width: requirement.width, height: requirement.height }); }
     catch (_) { /* WM may clamp; not fatal */ }
     await scrollToLoad(driver);
-    if (!(await controller.isCleanResults(driver))) return false;
+    if (!(await controller.isCleanResults(driver))) { console.log(`seed query=${query} rejected=live-gate`); return false; }
     // Slow, patient capture: wait for the lazy-loaded thumbnails to actually finish loading before
     // snapshotting, so the MHTML is self-contained and the wall never shows grey re-fetching. Pages
     // whose images never fill (slow net, partial gate) are skipped rather than cached grey.
@@ -86,7 +139,15 @@ async function main() {
       return false;
     }
     try {
+      if (strict && !captureQuality(await inspectQuality(driver, controller), requirement)) {
+        console.log(`seed query=${query} rejected=coverage-or-images metrics=${JSON.stringify(await inspectQuality(driver, controller))}`);
+        return false;
+      }
       const mhtml = await session.captureSnapshot();
+      const verdict = require("./seeder").snapshotArtifactQuality(mhtml);
+      if (!verdict.clean) { console.log(`seed query=${query} rejected=artifact-${verdict.reason}`); return false; }
+      // Recheck after capture too: a challenge arriving during capture must not replace cache.
+      if (strict && !captureQuality(await inspectQuality(driver, controller), requirement)) return false;
       const status = controller.writeSnapshotIfRicher(url, mhtml, loaded);
       if (status === "written") {
         console.log(`CAPTCHA cached-snapshot url=${url} bytes=${mhtml.length} loaded=${loaded}`);
@@ -98,11 +159,11 @@ async function main() {
         return true;
       }
       return false; // rejected: capture too small to be a real page
-    } catch (_) { return false; }
+    } catch (error) { console.error("seed capture failed", error.message); return false; }
   };
 
   const seeder = new SnapshotSeeder({
-    urls: queries, makeSession, probe, maxProfiles: 20,
+    urls: queries, makeSession, probe, maxProfiles: 20, retryGated: !strict,
     log: (m) => console.log(m),
   });
   const result = await seeder.run();
@@ -110,9 +171,17 @@ async function main() {
   console.log(`seed result captured=${result.captured.length}/${queries.length} ` +
     `profiles=${result.profiles} incomplete=${result.incomplete.length}`);
   return result.incomplete.length === 0 ? 0 : 1;
+  } finally {
+    if (solver) solver.cleanup();
+    fs.rmdirSync(lock);
+    ownedLock = null;
+  }
 }
 
 if (require.main === module) {
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+  process.on("disconnect", shutdown);
   main().then((code) => process.exit(code)).catch((e) => {
     console.error("seed fatal", e && e.message);
     process.exit(3);

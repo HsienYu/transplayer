@@ -114,38 +114,39 @@ gsettings set org.gnome.shell.extensions.dash-to-dock intellihide false
 擴充功能」來隱藏——`desktop-modern-guard` 的桌面租約會 import 並操作 `dock._intellihide`，dock
 不在會丟 `Unsupported Ubuntu Dock API`；而關閉 intellihide 設定不影響此物件（dock 無條件建立它）。
 
-**快照快取（主要的 reCAPTCHA 對策）**：Google 的 /sorry/ 擋頁（含 reCAPTCHA Enterprise）會頻繁
-出現且常連重載也被擋。`controller` 在乾淨結果捲動後透過 CDP `Page.captureSnapshot` 把整頁存成
-MHTML（`<TRANSPLAYER_PROFILE_DIR>/snapshots/<sha256>.mhtml`，log `CAPTCHA cached-snapshot`）。
-之後任何一次 `goTo` 被判定為被擋時，若已有該查詢的快照就改以 `file://` 載入（log
-`CAPTCHA served-snapshot`），畫面永遠是搜尋結果而非 CAPTCHA；尚無快照時才退回
-`CAPTCHA sorry-retry`（等 `SORRY_RETRY_MS` 4 秒重載一次）。技術人員可用這幾個 log token 在
-`out.log` 追蹤。**服務**端是否被擋以頁面內容判斷（`isGated`：/sorry/ URL、reCAPTCHA iframe 或
-頁面文字含「unusual traffic」／「not a robot」）。**存入快取**端（rc9 起）改用**正向判斷**
-（`isCleanResults`）：只有頁面有**足夠多張圖片結果**（`IMAGE_RESULT_MIN`，預設 25；真實結果頁
-有 200+ 張、灰頁／擋頁幾乎 0 張）才存；被擋、圖片太少或偵測出錯一律**不存**（fail-closed），
-所以灰色遮罩頁不會被當乾淨頁快取。快取持久化、不在開機時清空；而是**每天開機時抓當日新快照**：
-**rc9 起，每個 run 開始時 `controller` 會清掉 `se_*` 顯示 profile（保留 `snapshots/` 快取），
-改用全新 profile 拿 Google 新 session 的寬限期，讓開機 warm-up 能抓齊全部 13 個查詢**——不再因為
-長期被標記的 profile 永遠抓不到「硬查詢」而一直服務幾天前的舊快照。每個查詢每次 run 最多刷新一次
-（第一次看到乾淨頁就覆寫）；若當天真的抓不到，才退而服務最近一次成功抓到的頁（仍是真實結果，非 CAPTCHA）。
-因此務必維持「每天重開機一次」的運作習慣。AppArmor 的 chrome-first profile 為
-`flags=(unconfined){userns}`，故 `file://` 讀取不受限。
+### Scheduled snapshots (development, not deployed)
 
-**快照預抓 seed（rc10 起）**：`transplayer snapshot-seed`（開機 `login` 流程也會自動在背景跑一次）
-以輪替的全新 `seed-*` profile（有登入帳號時第一輪用 `seed-account`，永不清除）把 13 個查詢逐一抓成
-當日乾淨快照，讓長期被標記的顯示 profile 永遠抓不到的「硬查詢」也能在新 session 寬限期內抓到。
-被擋就輪替下一個 profile（上限 20 個）。
+Packaged playback reads the independent snapshot-only setting (default on). Manual
+`snapshot-seed` always applies validated capture checks.
+Snapshot-only displays use `snapshots-validated/`
+under the profile root; legacy `snapshots/` remain untouched and are not imported.
+Before trial playback, run the new `transplayer snapshot-seed` and verify all 13 queries
+succeed. Missing snapshots display a blank page and log `snapshot unavailable`.
 
-**rc14 起改為「慢速 seed」**：Google 影像頁的縮圖是捲動時才延遲載入的，整批快抓會在縮圖還沒載完就
-存檔，MHTML 只內嵌已載入的部分，顯示端得上網重抓其餘縮圖（短暫灰色，網路慢時更明顯）。因此 seed
-捲動後會先 `waitImagesSettled`——輪詢「**實際載入**」的圖片數（`complete && naturalWidth>0`，不只是有
-`src`）直到不再增加才截圖，使快照自我包含；載入數低於 `LOADED_IMAGE_MIN`（25）或等待期間被擋則略過、
-不存灰頁。每個快照旁另存 `<sha256>.mhtml.n` 記錄載入圖片數；`writeSnapshotIfRicher` 以此避免把「較
-豐富且當日（24 小時內）」的快照降級成較稀疏的一張（超過 24 小時的舊快照仍以新鮮度優先、照常更新）。
-代價是開機 seed 最壞多約 6.5 分鐘（每查詢最多等 30 秒），對開機背景預抓可接受。
+Playback starts a sequential refresh immediately, then waits one hour after completion
+before the next pass. Each query is attempted once; failures retain the previous cache.
+The timeline owns and stops the updater. There is no separate boot seed in this version.
+Updates become visible on the next navigation, never midway through a scroll.
 
-若 IP 被標記很重、整個熱機階段都被擋，建議每日展場休息讓 IP 冷卻。
+Capture uses each query's actual timeline rectangle and scroll distance from queries.js.
+Before and after capture, require no detected CAPTCHA, at least 100 loaded thumbnails
+of at least 60x60 pixels, zero unfinished visible thumbnails, and document/image coverage
+reaching the requested scroll distance plus the actual viewport height. Decoded MHTML HTML
+parts and embedded frame markers are checked before writing; malformed artifacts fail closed.
+An enabled solver gets at most 90 seconds to clear a detected gate. Failure preserves the
+previous snapshot. Accepted files replace previous files atomically; the richness guard applies.
+New account-login profiles are claimed only when empty. Existing unclaimed profiles are
+refused; do not add a marker to an arbitrary browser profile to bypass this protection.
+
+A shared `snapshot-seed.lock` directory excludes overlapping manual/scheduled writes.
+Normal exit and termination release it. Forced termination/power loss can leave a stale
+lock: confirm no seed process remains before an operator clears it. Updater output goes
+to the existing player supervisor logs.
+
+These metrics do not establish grey-free pixels, offline MHTML completeness or GPU health.
+Prior grey rendering while serving a snapshot remains unresolved. Run the
+[offline and desktop acceptance protocol](../tests/manual/scheduled-snapshots.md)
+before deployment. Preserve the old package/cache for rollback.
 
 ## Diagnostics / 診斷與隱私
 
@@ -220,3 +221,58 @@ dpkg 不是整個作品的原子切換；完成回退演練之前不能作正式
 驗證活動閘門並保全原套件、extension、設定與捷徑；
 遷移／回復需另有已核准程序，不能靠刪除衝突檔來「乾淨安裝」。
 Ubuntu 25.10 已 EOL，這不是允許自動升級正在播放的現場之理由。
+
+## NopeCHA settings (development, not deployed)
+
+Transplayer 設定新增「啟用 NopeCHA」、「API Key」、「儲存 NopeCHA 設定」、
+「清除 NopeCHA API Key 並停用」，以及官方帳號管理連結。預設停用。
+留空儲存保留既有金鑰；清除會同時停用。已存金鑰不回填畫面。
+帳號密碼只在 NopeCHA 官方網站輸入，Transplayer 不收集帳號密碼。
+
+開關存於 `~/.config/transplayer/nopecha.json`；金鑰獨立存於
+`~/.config/secrets/transplayer-nopecha.key`（檔案 600、目錄 700）。
+這是本機權限保護，並非加密。金鑰不加入一般設定備份、命令列或網址。
+背景 seed 每輪重新讀設定；啟用時建立私人擴充功能副本，正常結束即清理。
+強制終止可能留下 profile 根目錄中的 `nopecha-private-*`，仍限制為本人存取。
+停止並確認沒有 seed 程序後，維運人員才能清理這些殘留副本。
+
+設定下輪更新生效；正在執行的那輪繼續使用原設定。只讀快照模式的展示瀏覽器仍停用擴充功能；即時模式可依開關使用 NopeCHA，
+所有快照品質門檻不變。無金鑰時可能使用服務允許的免費額度；付費金鑰可能消耗額度。
+設定成功不代表帳號有效，也不保證解開展場的 reCAPTCHA。
+
+改用同版本 0.6.1 官方 automation build，雜湊固定於 browser-toolchain.json。
+[官方設定方式](https://developers.nopecha.com/guides/extension_advanced/)：
+私人副本的 manifest.nopecha.key，不使用含金鑰的 Magic URL。
+實際下載檔的 SHA-256 已核對，並以合成金鑰測試設定與清理；尚未使用真實金鑰或額度。
+
+## Independent playback switches
+
+「只讀完整儲存成功的快照」與 NopeCHA 各自儲存，不互相改動。
+快照播放開關存於 `~/.config/transplayer/playback.json`，預設開啟。
+
+| 只讀完整快照 | NopeCHA | 行為 |
+|---|---|---|
+| 開啟 | 關閉 | 展示讀合格快照；背景預抓不用 NopeCHA |
+| 開啟 | 開啟 | 展示讀合格快照；背景預抓使用 NopeCHA |
+| 關閉 | 關閉 | 即時搜尋，不用 NopeCHA；失敗改讀合格快照 |
+| 關閉 | 開啟 | 即時搜尋與背景預抓使用 NopeCHA；失敗改讀合格快照 |
+
+兩種模式都逐項背景更新，完成一輪後等一小時。即時模式也會嘗試擷取通過完整品質
+檢查的頁面，兩者共用 `snapshots-validated/`。載入失敗、偵測到被擋或圖片未載入時
+改讀備援，沒有合格備援就留白。即時頁面在偵測完成前可能短暫顯示挑戰；只有快照
+模式不主動導航到即時搜尋。即時視窗每秒持續檢查，並於停止播放時清理監看計時器。
+
+播放模式與即時視窗的 NopeCHA 開關須停止並重新開始播放；背景更新下輪讀取
+NopeCHA 設定。切到即時模式不會停用背景預抓或降低快照品質門檻。
+
+
+### Authorized initial legacy trial cache
+
+For the initial rc15 trial, the user accepts shorter archived pages. Offline validation
+accepts13/13 trial copies with no detected challenge and zero pending result thumbnails.
+Eight short pages naturally stop at the document bottom while scene timing stays unchanged.
+Query2's image-free challenge overlay was removed in an isolated derivative;100 loaded result
+images remain, but the page is only one viewport tall and stays stationary. Original files
+remain untouched. This exception is for the explicitly reviewed legacy imports only;
+automatic network captures still require full per-scene depth and reject challenge artifacts.
+See the deployment runbook for private evidence and pending installation/desktop acceptance.

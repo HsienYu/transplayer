@@ -130,6 +130,10 @@ def configure(home, video, autostart=False, replace=False):
                "expectedWidth": 2160, "expectedHeight": 1920}
     with account_lock(home) as (home, base):
         current = _owned_config(base)
+        # Preserve a tuned videoTint (set out-of-band in config.json) across re-configure, so a
+        # deploy's `configure --autostart --replace` does not silently reset the operator's tint.
+        if isinstance(current, dict) and isinstance(current.get("videoTint"), str):
+            desired["videoTint"] = current["videoTint"]
         auto = _autostart(home)
         if current is not None and current != desired and not replace:
             raise SetupError("影片設定不同；請確認變更後再儲存。")
@@ -176,3 +180,62 @@ def load_owned(home, wait=False):
             raise SetupError("尚未完成設定，請先開啟 Transplayer 設定。")
         validate_video(value["videoPath"])
         return value
+
+
+def _nopecha_paths(home, base):
+    secrets = home / ".config/secrets"
+    _dir(secrets, private=True)
+    key = secrets / "transplayer-nopecha.key"
+    settings = base / "nopecha.json"
+    for path in (key, settings):
+        _safe(path)
+        if path.exists() and (path.stat().st_mode & 0o077 or path.stat().st_nlink != 1):
+            raise SetupError("NopeCHA 設定權限不安全；需要僅本人可讀寫的檔案。")
+    return settings, key
+
+
+def nopecha_status(home):
+    with account_lock(home) as (home, base):
+        settings, key = _nopecha_paths(home, base)
+        try:
+            value = json.loads(settings.read_text()) if settings.exists() else {"enabled": False}
+            if set(value) != {"enabled"} or type(value["enabled"]) is not bool:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise SetupError("NopeCHA 設定格式錯誤。") from None
+        return {"enabled": value["enabled"], "hasKey": key.exists() and key.stat().st_size > 0}
+
+
+def save_nopecha(home, enabled, api_key="", clear=False):
+    if type(enabled) is not bool or not isinstance(api_key, str) or len(api_key) > 512 or (
+            api_key and not re.fullmatch(r"[A-Za-z0-9_.-]+", api_key)):
+        raise SetupError("NopeCHA API Key 格式錯誤，請勿輸入帳號密碼。")
+    with account_lock(home) as (home, base):
+        settings, key = _nopecha_paths(home, base)
+        # Disable first so an interrupted update cannot unexpectedly enable a changed key.
+        _atomic(settings, _bytes({"enabled": False}))
+        if clear or api_key:
+            _atomic(key, b"" if clear else api_key.encode("ascii"))
+        _atomic(settings, _bytes({"enabled": enabled}))
+
+
+def snapshot_mode(home):
+    with account_lock(home) as (_home, base):
+        file = base / "playback.json"
+        _safe(file)
+        if not file.exists():
+            return True
+        try:
+            value = json.loads(file.read_text())
+            if set(value) != {"snapshotOnly"} or type(value["snapshotOnly"]) is not bool:
+                raise ValueError()
+            return value["snapshotOnly"]
+        except (ValueError, TypeError):
+            raise SetupError("快照播放設定格式錯誤。") from None
+
+
+def save_snapshot_mode(home, enabled):
+    if type(enabled) is not bool:
+        raise SetupError("快照播放設定必須為開啟或關閉。")
+    with account_lock(home) as (_home, base):
+        _atomic(base / "playback.json", _bytes({"snapshotOnly": enabled}))

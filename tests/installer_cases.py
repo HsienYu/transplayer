@@ -24,6 +24,72 @@ class SetupTests(unittest.TestCase):
         self.video = self.home / "作品 with spaces.webm"
         self.video.write_bytes(b"synthetic media")
 
+    def test_play_and_manual_seed_enable_snapshot_only(self):
+        import runtime
+        with patch.object(runtime.os, "getuid", return_value=1000), \
+             patch.object(runtime, "system_lock"), \
+             patch.object(runtime, "load_owned"), \
+             patch.object(runtime, "session_env", return_value={}), \
+             patch.object(runtime.os, "execve") as execute:
+            runtime.play(self.home)
+            self.assertEqual(execute.call_args.args[2].get("TRANSPLAYER_SNAPSHOT_ONLY"), "1")
+            self.assertEqual(runtime._seed_env(self.home).get("TRANSPLAYER_SNAPSHOT_ONLY"), "1")
+
+    def test_nopecha_private_key_and_public_switch(self):
+        core.save_nopecha(self.home, True, "fixture-key")
+        self.assertEqual(core.nopecha_status(self.home), {"enabled": True, "hasKey": True})
+        key = self.home / ".config/secrets/transplayer-nopecha.key"
+        self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(key.parent.stat().st_mode & 0o777, 0o700)
+        self.assertNotIn("fixture-key", (self.home / ".config/transplayer/nopecha.json").read_text())
+        core.save_nopecha(self.home, False, "")
+        self.assertEqual(key.read_text(), "fixture-key")
+        core.save_nopecha(self.home, False, "", clear=True)
+        self.assertFalse(core.nopecha_status(self.home)["hasKey"])
+
+    def test_nopecha_rejects_bad_key_and_symlink_without_touching_target(self):
+        with self.assertRaises(core.SetupError):
+            core.save_nopecha(self.home, True, "bad\nkey")
+        core.save_nopecha(self.home, False, "")
+        target = self.home / "untouched"
+        target.write_text("original")
+        key = self.home / ".config/secrets/transplayer-nopecha.key"
+        key.unlink(missing_ok=True)
+        key.symlink_to(target)
+        with self.assertRaises(core.SetupError):
+            core.save_nopecha(self.home, True, "fixture-key")
+        self.assertEqual(target.read_text(), "original")
+
+    def test_independent_snapshot_and_nopecha_modes(self):
+        import runtime
+        for snapshot_only in (False, True):
+            for solver in (False, True):
+                core.save_snapshot_mode(self.home, snapshot_only)
+                core.save_nopecha(self.home, solver, "")
+                self.assertEqual(core.snapshot_mode(self.home), snapshot_only)
+                self.assertEqual(core.nopecha_status(self.home)["enabled"], solver)
+                with patch.object(runtime.os, "getuid", return_value=1000), \
+                     patch.object(runtime, "system_lock"), patch.object(runtime, "load_owned"), \
+                     patch.object(runtime, "session_env", return_value={}), \
+                     patch.object(runtime.os, "execve") as execute:
+                    runtime.play(self.home)
+                    env = execute.call_args.args[2]
+                    self.assertEqual(env["TRANSPLAYER_SNAPSHOT_ONLY"], "1" if snapshot_only else "0")
+                    self.assertEqual(env["TRANSPLAYER_VALIDATED_SNAPSHOTS"], "1")
+        with self.assertRaises(core.SetupError):
+            core.save_snapshot_mode(self.home, "false")
+
+    def test_seed_account_claim_is_private_and_refuses_unclaimed_existing_data(self):
+        import runtime
+        profile=runtime.prepare_seed_account(self.home)
+        self.assertEqual(profile.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((profile / ".transplayer-profile").read_text(), "transplayer-exhibition-basic-v1\n")
+        self.assertEqual(runtime.prepare_seed_account(self.home), profile)
+        (profile / ".transplayer-profile").unlink()
+        (profile / "foreign-data").write_text("synthetic")
+        with self.assertRaises(core.SetupError):
+            runtime.prepare_seed_account(self.home)
+
     def test_platform_is_exact(self):
         core.check_platform({"ID": "ubuntu", "VERSION_ID": "26.04"}, "x86_64", "50.0")
         for osinfo, arch, shell in [
@@ -48,6 +114,22 @@ class SetupTests(unittest.TestCase):
         core.configure(self.home, self.video, False)
         self.assertFalse(auto.exists())
         self.assertTrue(self.video.exists())
+
+    def test_configure_preserves_a_tuned_video_tint(self):
+        core.configure(self.home, self.video, True)
+        base = self.home / ".config/transplayer"
+        config = base / "config.json"
+        setup = base / "setup.json"
+        # Operator tunes the tint out-of-band and updates the ownership hash (as the runbook does).
+        data = json.loads(config.read_text())
+        data["videoTint"] = "rgba(230,230,230,0.20)"
+        blob = (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode()
+        config.write_bytes(blob)
+        setup.write_text(json.dumps(
+            {"release": "r10", "configSha256": hashlib.sha256(blob).hexdigest()}))
+        # A later re-configure (e.g. a deploy restoring autostart) must keep the tuned tint.
+        core.configure(self.home, self.video, autostart=True, replace=True)
+        self.assertEqual(json.loads(config.read_text()).get("videoTint"), "rgba(230,230,230,0.20)")
 
     def test_existing_app_directory_becomes_private(self):
         base = self.home / ".config/transplayer"

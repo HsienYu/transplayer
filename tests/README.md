@@ -93,3 +93,33 @@ Fixtures use standard-library temporary directories; no real media, personal
 browser data or credentials. See [development](../docs/development.md) and
 [operations](../docs/operations.md) for build provenance, release blockers and
 maintenance boundaries.
+
+## Scheduled snapshot coverage
+
+`seeder.test.js` covers scheduling, cancellation, failed passes, queries after a gate, and
+incomplete/shallow/malformed metrics. `controller.test.js` covers snapshot-only navigation,
+missing/legacy cache rejection and no mid-display reload. `installer_cases.py` checks mode
+wiring. Fixtures are synthetic and inline. 165 Node tests pass (including Python wrapper).
+Grey pixels, offline completeness and real desktop lifecycle remain unverified; see
+[manual acceptance](manual/scheduled-snapshots.md).
+
+NopeCHA settings: `nopecha-settings.test.js` verifies private extension copies, cleanup,
+disabled behavior, unsafe permissions, hostile key values and symlinks; Python installer
+cases verify private storage, masked status, blank-save preservation and explicit clearing.
+`chrome-session.test.js` restricts the configured path to seed mode and tests disable precedence.
+All keys are synthetic. Current suite: 169 Node tests, including 55 Python tests through the
+installer wrapper (not additive). Real GTK/solver checks remain in the manual protocol.
+
+Independent mode tests cover four saved-setting/runtime combinations, timeline updater and
+solver startup/cleanup, shared validated cache, live navigation failure and incomplete-page
+readiness. Current full run: 176 Node tests pass, including 56 Python cases via the wrapper.
+Desktop acceptance, including transient challenge visibility, remains pending.
+
+
+`manual/legacy-trial-cache.js` records the authorized13-query offline legacy migration test.
+Run only on the exhibition test staging layout with the packaged Node24 and explicit
+TRANSPLAYER_DRIVER path, as in the deployment runbook. It creates a fresh private trial
+folder and copies original snapshots; it never installs or mutates the production cache.
+Query2 removal asserts the inspected overlay structure and unchanged image count; every
+output must pass artifact/image/scroll checks. Raw captures stay private on the target.
+Current repair suite:184 Node tests, including57 Python cases (not additive).

@@ -20,6 +20,8 @@ osc.on("open", async () => {
   initialized = true;
   try {
     const config = await window.transplayer.config();
+    const tint = document.getElementById("tint");
+    if (tint && typeof config.videoTint === "string") tint.style.background = config.videoTint;
     video.addEventListener("loadedmetadata", async () => {
       try {
         if (!Number.isFinite(video.duration) || config.startSeconds >= video.duration) {
