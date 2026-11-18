@@ -99,11 +99,19 @@ class ScheduledRefresh {
   }
   stop() { this.stopped = true; this.cancel(this.timer); }
 }
-function captureQuality(s, requirement) {
-  const depth = requirement ? requirement.scroll + (s && s.viewportHeight || requirement.height) : 14000;
-  return !!s && s.gated === false && Number.isFinite(s.loaded) && s.loaded >= 100 &&
-    s.pending === 0 && Number.isFinite(s.height) && s.height >= depth &&
-    Number.isFinite(s.bottom) && s.bottom >= depth;
+// The seed capture bar. rc21: a clean, settled image grid is captured on its loaded-thumbnail
+// count alone -- not gated, every thumbnail finished (pending === 0), and at least
+// SEED_CAPTURE_MIN (40) loaded. The old bar also demanded loaded>=100 AND a full scroll depth
+// (height/bottom >= requirement.scroll + viewport); real lazy-load result grids plateau a few
+// hundred images short of that synthetic depth, so clean pages (e.g. explosion news, loaded=351,
+// gated=false) were rejected `coverage-or-images` every run and their snapshots stayed frozen at
+// the last seed. Matches controller.js displayCaptureOk (rc20). `requirement` is accepted for the
+// call sites but no longer gates depth; a grey/incomplete artifact is still blocked downstream by
+// writeSnapshotIfRicher -> writeSnapshot -> snapshotArtifactQuality.
+const SEED_CAPTURE_MIN = 40;
+function captureQuality(s, requirement) { // eslint-disable-line no-unused-vars
+  return !!s && s.gated === false && Number.isFinite(s.loaded) &&
+    s.loaded >= SEED_CAPTURE_MIN && s.pending === 0;
 }
 module.exports.ScheduledRefresh = ScheduledRefresh;
 module.exports.captureQuality = captureQuality;

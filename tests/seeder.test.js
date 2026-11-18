@@ -110,12 +110,16 @@ test('failed refresh is logged and delayed instead of immediately retried', asyn
   assert.equal(delay, 3600000); assert.match(logs[0], /offline/);
   job.stop();
 });
-test('capture quality rejects gates, grey thumbnails, shallow and malformed pages', () => {
+test('capture quality rejects gates, grey thumbnails and too-few images (rc21: no depth bar)', () => {
   const good = { loaded: 240, pending: 0, height: 15000, bottom: 14500, gated: false };
   assert.equal(captureQuality(good), true);
-  for (const patch of [{ gated: true }, { pending: 1 }, { loaded: 25 }, { height: 5000 },
-    { bottom: 5000 }, { loaded: NaN }, { pending: -1 }])
+  for (const patch of [{ gated: true }, { pending: 1 }, { loaded: 39 }, { loaded: NaN },
+    { pending: -1 }])
     assert.equal(captureQuality({ ...good, ...patch }), false);
+  assert.equal(captureQuality({ ...good, loaded: 40 }), true);        // 40 thumbnails is the floor
+  // rc21: a clean, settled page captures regardless of scroll depth -- the old depth bar froze
+  // lazy-load grids (hundreds of images, pending 0) whose page is shorter than requirement.scroll.
+  assert.equal(captureQuality({ ...good, height: 5000, bottom: 4800 }), true);
   assert.equal(captureQuality(null), false);
 });
 test('scheduled pass attempts later queries after a gate without rotating profiles', async () => {
@@ -149,11 +153,16 @@ test('artifact checks inspect encoded nested frames, not only the clean parent p
 test('script text alone is not a visible challenge but missing parser never accepts input', () => {
   assert.equal(snapshotArtifactQuality(archive([['8bit','<body><script>"unusual traffic"</script>Results</body>']])).clean,true);
 });
-test('scene depth uses that query scroll and viewport, without weakening image checks', () => {
-  const s={loaded:100,pending:0,height:11000,bottom:10900,gated:false,viewportHeight:1620};
-  assert.equal(captureQuality(s,{scroll:9000,height:1620}),true);
-  assert.equal(captureQuality(s,{scroll:12000,height:1964}),false);
-  assert.equal(captureQuality({...s,pending:1},{scroll:9000,height:1620}),false);
+test('rc21: a clean settled grid captures regardless of scroll depth', () => {
+  // The explosion-news shape the strict depth bar rejected on 2026-11-19: loaded=351, pending=0,
+  // gated=false, but the page (height 10911) is shorter than requirement.scroll+viewport (15833),
+  // so captureQuality used to return false and the snapshot stayed frozen. rc21 captures it.
+  const explosion={loaded:351,pending:0,height:10911,bottom:10643,gated:false,viewportHeight:1833};
+  assert.equal(captureQuality(explosion,{scroll:14000,height:1833}),true);
+  // depth no longer matters, but gated / unsettled / too-few are still rejected
+  assert.equal(captureQuality({...explosion,gated:true},{scroll:14000,height:1833}),false);
+  assert.equal(captureQuality({...explosion,pending:2},{scroll:14000,height:1833}),false);
+  assert.equal(captureQuality({loaded:39,pending:0,height:9000,bottom:8900,gated:false}),false);
 });
 test('artifact rejects a challenge iframe even when its remote contents are missing', () => {
   for(const body of ['<iframe src="https://www.google.com/sorry/index"></iframe>',
