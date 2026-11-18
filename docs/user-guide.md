@@ -6,7 +6,7 @@
 ## Platform / 平台（正式版）
 
 **正式安裝平台為 Ubuntu 26.04 LTS、amd64（x86_64）、預設 GNOME 50 桌面、Wayland／Xwayland。**
-目前的套件版本是 `1.1.0~rc8`,已在參考展場機(MSI MS-7D17／RTX 4060)完成安裝、重開機與自動播放驗證。
+目前的套件版本是 `1.1.0~rc21`,已在參考展場機(MSI MS-7D17／RTX 4060)完成安裝、重開機與自動播放驗證。
 ARM、其他桌面環境、其他 Ubuntu 版本不在支援範圍。舊的 Ubuntu 25.10／r9 現場不用這份流程升級。
 
 尚未完成的項目(不影響一般安裝,但轉為長期展出前建議補齊):長時間連續 soak 測試、
@@ -20,9 +20,9 @@ ARM、其他桌面環境、其他 Ubuntu 版本不在支援範圍。舊的 Ubunt
    合成桌面為 **2160×1920**。可先接好,方向稍後在系統設定裡調。
 3. **作品影片檔**(另外向專案取得,不隨程式散布):檔名 `stonesandelephants.webm`,
    規格 **2160×1920、約 780 秒**。見下一節放置位置。
-4. **安裝套件檔**:自 [GitHub Release v1.1.0-rc8](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc8)
-   下載 `transplayer_1.1.0.rc8_amd64.deb`(GitHub 會把版本號的 `~` 顯示成 `.`,套件內版本仍是
-   `1.1.0~rc8`;或向專案索取同一檔案),以及它的 **SHA-256** 校驗值(見「安裝」)。
+4. **安裝套件檔**:自 [GitHub Release v1.1.0-rc21](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc21)
+   下載 `transplayer_1.1.0.rc21_amd64.deb`(GitHub 會把版本號的 `~` 顯示成 `.`,套件內版本仍是
+   `1.1.0~rc21`;或向專案索取同一檔案),以及它的 **SHA-256** 校驗值(見「安裝」)。
 5. **網路**:即時圖片搜尋需要連網。第三方網站可能改版或要求驗證,無法保證永遠不出現 CAPTCHA
    (本版已內建自動處理,見「常見問題」)。
 6. **管理員密碼**:只有「安裝套件」這一步需要;之後的設定與播放都用一般帳號,**不要 sudo**。
@@ -42,20 +42,20 @@ ARM、其他桌面環境、其他 Ubuntu 版本不在支援範圍。舊的 Ubunt
 
 ## 安裝 / Install（套件這一步需要管理員）
 
-1. 自 [GitHub Release v1.1.0-rc8](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc8)
-   下載 `transplayer_1.1.0.rc8_amd64.deb`(或向專案索取同一檔案),放到展示帳號的下載資料夾,例如 `~/Downloads/`。
+1. 自 [GitHub Release v1.1.0-rc21](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc21)
+   下載 `transplayer_1.1.0.rc21_amd64.deb`(或向專案索取同一檔案),放到展示帳號的下載資料夾,例如 `~/Downloads/`。
 2. **先核對檔案雜湊**,確認拿到的是正確、未被竄改的檔案。開啟「終端機」,執行:
    ```sh
-   sha256sum ~/Downloads/transplayer_1.1.0.rc8_amd64.deb
+   sha256sum ~/Downloads/transplayer_1.1.0.rc21_amd64.deb
    ```
    輸出的雜湊必須完全等於專案提供的值:
    ```
-   5a919d05a08bc6b31770f5d02067a2ed2a6e320eef0680a9b79632c18884a0a5
+   df4630851918b37ec055ac33553c773041dfd3ac0358c86aee15efa8602b9b98
    ```
    不一致就**不要安裝**,重新向專案索取檔案。
 3. 安裝套件(會要求輸入管理員密碼):
    ```sh
-   sudo apt install ~/Downloads/transplayer_1.1.0.rc8_amd64.deb
+   sudo apt install ~/Downloads/transplayer_1.1.0.rc21_amd64.deb
    ```
    安裝過程**不會**以 root 啟動作品、不會自動登入／登出／重開機、不會旋轉螢幕,也不會關閉系統安全措施。
 4. 若機器上有舊的手動 r8／r9 安裝、同名桌面擴充套件或來路不明的設定,請**停止**並交由技術人員處理,
@@ -162,10 +162,11 @@ gsettings set org.gnome.shell.extensions.dash-to-dock intellihide false
 - **全螢幕背景沒鋪滿、四周露出桌面底色**:先確認上面「全螢幕背景與桌面 dock」那一步做了
   (`dash-to-dock dock-fixed false`)。不要靠手動雙擊最大化(會把其他搜尋視窗壓到背後)。
 - **出現 CAPTCHA／搜尋頁變成驗證畫面**:Google 會頻繁阻擋這類自動化搜尋。主要
-  對策是「**當日快照快取**」:機器每日重開機、開機後前幾輪搜尋多半乾淨,程式會把乾淨的搜尋
-  結果頁整頁存下來;之後 Google 一旦改出 CAPTCHA,就改顯示當天稍早存好的那一頁——所以畫面上
-  **看到的一律是當天的搜尋結果,不會是 CAPTCHA**。因此請維持「每天重開機一次」的習慣(讓快取
-  更新成當天資料)。若畫面真的卡在 CAPTCHA,交給技術人員查 `out.log` 的 `CAPTCHA served-snapshot`
+  對策是「**當日快照快取**」:程式會把乾淨的搜尋結果頁整頁存下來;之後 Google 一旦改出
+  CAPTCHA,就改顯示稍早存好的那一頁——所以畫面上**看到的一律是搜尋結果,不會是 CAPTCHA**。
+  快取會自動更新成最新乾淨內容,來源有兩條:**每小時**背景以登入帳號重抓全部查詢,以及牆面
+  **即時瀏覽**到乾淨未被擋的頁面時就地存成最新版(兩者都是「較新覆蓋較舊」)。因此仍建議維持
+  「每天重開機一次」的習慣,作為額外保險讓當天前幾輪乾淨搜尋也更新快取。若畫面真的卡在 CAPTCHA,交給技術人員查 `out.log` 的 `CAPTCHA served-snapshot`
   /`cached-snapshot`/`sorry-retry` 記錄。不需要提供私人帳號或購買驗證額度。
 - **搜尋結果空白**:可能是網路或網站限制;播放器啟動成功不代表每次搜尋都有結果。
 - **套件維護被拒／桌面狀態不符**:保留錯誤訊息交技術人員;不要刪 profile 鎖、維護標記,

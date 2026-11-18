@@ -2,7 +2,7 @@
 
 ## Scope / 適用範圍
 
-本文件適用 Ubuntu **26.04 LTS amd64／GNOME 50**；目前部署版本為 `1.1.0~rc8`，
+本文件適用 Ubuntu **26.04 LTS amd64／GNOME 50**；目前部署版本為 `1.1.0~rc21`，
 已在參考展場機實機驗證，發行前稽核閘門（soak／授權／漏洞／lintian）仍開放。
 安裝來源與發行限制見[開發指南](development.md)；
 一般設定見[使用者指南](user-guide.md)。
@@ -114,7 +114,7 @@ gsettings set org.gnome.shell.extensions.dash-to-dock intellihide false
 擴充功能」來隱藏——`desktop-modern-guard` 的桌面租約會 import 並操作 `dock._intellihide`，dock
 不在會丟 `Unsupported Ubuntu Dock API`；而關閉 intellihide 設定不影響此物件（dock 無條件建立它）。
 
-### Scheduled snapshots (development, not deployed)
+### Scheduled snapshots (deployed, rc19+)
 
 Packaged playback reads the independent snapshot-only setting (default on). Manual
 `snapshot-seed` always applies validated capture checks.
@@ -123,20 +123,39 @@ under the profile root; legacy `snapshots/` remain untouched and are not importe
 Before trial playback, run the new `transplayer snapshot-seed` and verify all 13 queries
 succeed. Missing snapshots display a blank page and log `snapshot unavailable`.
 
-Playback starts a sequential refresh immediately, then waits one hour after completion
-before the next pass. Each query is attempted once; failures retain the previous cache.
-The timeline owns and stops the updater. There is no separate boot seed in this version.
-Updates become visible on the next navigation, never midway through a scroll.
+Two paths write snapshots. (1) The **hourly seed** (seeder.js/seed.js) starts a sequential
+refresh on playback start, then waits one hour after completion before the next pass; each
+query is attempted once and failures retain the previous cache. It writes through
+`writeSnapshotIfRicher`, keeping the existing file when the new capture is under
+`SNAPSHOT_KEEP_RATIO` (0.7) of its thumbnail count and under `SNAPSHOT_KEEP_MAX_AGE_MS` (24h)
+old. (2) The **live display refresh** (controller.js) stores the wall's own view whenever it
+browses a clean, ungated page for a query, replacing the snapshot unconditionally — newest
+clean capture wins (`writeSnapshot`'s artifact-cleanliness check still applies). The timeline
+owns and stops the updater. There is no separate boot seed in this version. Updates become
+visible on the next navigation, never midway through a scroll.
 
-Capture uses each query's actual timeline rectangle and scroll distance from queries.js.
-Before and after capture, require no detected CAPTCHA, at least 100 loaded thumbnails
-of at least 60x60 pixels, zero unfinished visible thumbnails, and document/image coverage
-reaching the requested scroll distance plus the actual viewport height. Decoded MHTML HTML
-parts and embedded frame markers are checked before writing; malformed artifacts fail closed.
+The capture gate is count-based (rc20/rc21). The live display path (`displayCaptureOk`,
+controller.js) requires only no detected CAPTCHA (`gated === false`) and at least 40 loaded
+thumbnails (`DISPLAY_CAPTURE_MIN`). The hourly seed (`captureQuality`, seeder.js) adds
+`pending === 0` (every visible thumbnail finished) on top of the same 40 floor
+(`SEED_CAPTURE_MIN`). The earlier bar — 100-plus loaded plus document/image coverage reaching
+the requested scroll distance plus the actual viewport height — froze lazy-loaded grids
+(hundreds of images that never reach that depth), so their snapshots stayed stale and blocked
+pages fell back to an expired cache. Decoded MHTML HTML parts and embedded frame markers are
+still checked before writing; malformed artifacts fail closed.
 An enabled solver gets at most 90 seconds to clear a detected gate. Failure preserves the
 previous snapshot. Accepted files replace previous files atomically; the richness guard applies.
 New account-login profiles are claimed only when empty. Existing unclaimed profiles are
 refused; do not add a marker to an arbitrary browser profile to bypass this protection.
+The dedicated profiles (including `seed-account`) must stay mode `0700` and keep their
+`.transplayer-profile` marker (`0600`, exact bytes `transplayer-exhibition-basic-v1`). If
+the top directory widens (e.g. `0775`) or the marker is lost, every capture fails closed
+with `Unsafe Chrome profile directory` / marker errors and a pass returns `captured=0/13`.
+The seed must run inside the native player session: launching `seed.js` over SSH, outside
+the logged-in desktop session, was observed to abort (SIGABRT) at the first navigation. To
+force a refresh remotely, restart the player (`pm2 restart`) so the in-process refresh worker
+runs it; the local `transplayer snapshot-seed` command, run from the desktop session, is
+unaffected.
 
 A shared `snapshot-seed.lock` directory excludes overlapping manual/scheduled writes.
 Normal exit and termination release it. Forced termination/power loss can leave a stale
@@ -222,7 +241,7 @@ dpkg 不是整個作品的原子切換；完成回退演練之前不能作正式
 遷移／回復需另有已核准程序，不能靠刪除衝突檔來「乾淨安裝」。
 Ubuntu 25.10 已 EOL，這不是允許自動升級正在播放的現場之理由。
 
-## NopeCHA settings (development, not deployed)
+## NopeCHA settings (deployed; off by default)
 
 Transplayer 設定新增「啟用 NopeCHA」、「API Key」、「儲存 NopeCHA 設定」、
 「清除 NopeCHA API Key 並停用」，以及官方帳號管理連結。預設停用。
@@ -273,6 +292,7 @@ accepts13/13 trial copies with no detected challenge and zero pending result thu
 Eight short pages naturally stop at the document bottom while scene timing stays unchanged.
 Query2's image-free challenge overlay was removed in an isolated derivative;100 loaded result
 images remain, but the page is only one viewport tall and stays stationary. Original files
-remain untouched. This exception is for the explicitly reviewed legacy imports only;
-automatic network captures still require full per-scene depth and reject challenge artifacts.
+remain untouched. This exception is for the explicitly reviewed legacy imports only.
+(This rc15 trial note predates rc20/rc21; the capture gate above is now count-only and no
+longer requires full per-scene depth, but challenge artifacts are still rejected.)
 See the deployment runbook for private evidence and pending installation/desktop acceptance.

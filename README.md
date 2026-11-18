@@ -62,12 +62,28 @@ npm test
 詳見[開發指南](docs/development.md)。自動化測試不證明透明度、聲音、實體幾何、
 網站穩定性或展覽可用性；所有真正部署仍須有記錄的實機驗收。
 
-## Scheduled snapshot development
+## Snapshot refresh / 快照更新
 
-The development change defaults to validated snapshot playback, with an independent live-search
-option. It refreshes searches on playback startup and one hour after each pass completes. Not deployed. See [operations](docs/operations.md)
-for first-cache preparation and [visual acceptance](tests/manual/scheduled-snapshots.md).
+Validated snapshot playback is the default (deployed since rc19), with an independent
+live-search option. Two paths keep the cache fresh:
 
-The development settings window also provides an optional NopeCHA switch, masked API-key
-entry, key removal and an official account-management link. It affects background captures starting with the next pass and live-search windows
-after playback restarts. Snapshot-only playback has its own independent switch. See operations for private storage and manual validation.
+- **Live display refresh**: whenever the wall itself browses a clean, ungated page
+  (`gated === false`, at least 40 thumbnails loaded), that view replaces the query's
+  snapshot unconditionally — the newest clean capture always wins.
+- **Hourly seed**: on playback start, then one hour after each pass completes, a background
+  pass re-fetches all 13 queries using the logged-in account profile. The seed additionally
+  requires every visible thumbnail finished (`pending === 0`), and keeps the existing
+  snapshot when a new capture is thinner than 70% of it and under 24h old — a guard so a
+  transient thin grab never replaces a rich one.
+
+rc20 relaxed the live path and rc21 the seed to this count-based gate; the earlier bar
+(100-plus loaded plus full scroll-depth coverage) left lazy-loaded grids of hundreds of
+images stale forever, so a blocked page could only fall back to an expired snapshot. Grey or
+incomplete pages are still never stored. See [operations](docs/operations.md) for first-cache
+preparation, the capture gate and troubleshooting, and
+[visual acceptance](tests/manual/scheduled-snapshots.md).
+
+The settings window also provides an optional NopeCHA switch, masked API-key entry, key
+removal and an official account-management link. It affects background captures starting
+with the next pass and live-search windows after playback restarts. Snapshot-only playback
+has its own independent switch. See operations for private storage and manual validation.
