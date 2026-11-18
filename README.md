@@ -37,7 +37,7 @@ Ubuntu 25.10 已停止支援，但請**勿**因此自行就地升級正在播放
 自 [GitHub Release v1.1.0-rc21](https://github.com/HsienYu/transplayer/releases/tag/v1.1.0-rc21)
 下載 `transplayer_1.1.0.rc21_amd64.deb`（GitHub 會把版本號的 `~` 顯示成 `.`，套件內版本仍是
 `1.1.0~rc21`），或向專案索取同一檔案；安裝前先核對其 SHA-256
-（`d7ea36f6439e16f6bcd4f270b6ae9c9fa7264a6827a8cd0518762823f8ab9a85`，Release 頁亦有列）。
+（`df4630851918b37ec055ac33553c773041dfd3ac0358c86aee15efa8602b9b98`，Release 頁亦有列）。
 不要把 clone 原始碼或 staging tree 當成安裝包。
 
 設定工具不自動登出／重開、修改 GDM／螢幕配置或索取密碼。
