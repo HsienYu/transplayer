@@ -40,6 +40,12 @@ class Controller {
   // A clean image-results page carries 200+ thumbnails (measured 209-780 on live captures);
   // a grey/reCAPTCHA page has ~0. 25 sits far below any real page and far above any gated one.
   IMAGE_RESULT_MIN = 25;
+  // Minimum images ACTUALLY loaded before the LIVE display-refresh captures a snapshot. Looser
+  // than the seed's captureQuality (loaded>=100, pending===0, full scroll depth): a maximised
+  // lazy-loading grid plateaus well below 100 (measured gated=false loaded~59 pending>0) yet is a
+  // clean, complete-looking results page, so the strict seed bar left its snapshot stale forever.
+  // 40 sits above any grey/gated page (~0) and below the live plateau. Tunable per venue.
+  DISPLAY_CAPTURE_MIN = 40;
   // Minimum images that must have ACTUALLY loaded (naturalWidth>0), not merely carry a src,
   // before the seed captures. Google lazy-loads thumbnails; capturing before they load embeds
   // nothing for them, so the display re-fetches them (brief grey) or shows grey if the network
@@ -259,6 +265,13 @@ class Controller {
     return true;
   }
 
+  // The LIVE display-refresh capture bar: a real, populated results page (not grey/gated, with at
+  // least DISPLAY_CAPTURE_MIN images actually loaded). Deliberately looser than the seed's
+  // captureQuality so a clean maximised grid can refresh its own snapshot.
+  displayCaptureOk(s) {
+    return !!s && s.gated === false && Number.isFinite(s.loaded) && s.loaded >= this.DISPLAY_CAPTURE_MIN;
+  }
+
   async maybeCapture(id) {
     if (this.snapshotOnly) return;
     const entry = this.browsers[id];
@@ -268,15 +281,35 @@ class Controller {
     if (this.validatedSnapshots) {
       entry.captureUrl = null;
       try {
-        const { QUALITY_JS, captureQuality } = require("./seeder");
+        const { QUALITY_JS } = require("./seeder");
         const inspect = async () => ({ ...(await entry.driver.executeScript(QUALITY_JS)),
           gated: !(await this.isCleanResults(entry.driver)) });
         const before = await inspect();
-        const requirement = require("./queries").requirementFor(url);
-        if (!captureQuality(before, requirement)) return;
+        // LIVE display-refresh gate: a real, populated results page only -- not a grey/gated
+        // reCAPTCHA (gated===false) and with >= DISPLAY_CAPTURE_MIN images actually loaded. The
+        // seed's captureQuality (loaded>=100, pending===0) is unreachable for a maximised grid, so
+        // clean live pages never refreshed their snapshots and the display fell back to a stale
+        // seed. No requirementFor() here (it threw "Unknown snapshot query" for off-list URLs and
+        // swallowed the capture); the gate below, the re-check after capture, and writeSnapshot's
+        // own artifact-cleanliness check are what keep a grey/incomplete page out of the cache.
+        if (!this.displayCaptureOk(before)) {
+          console.log(`CAPTCHA skip-capture url=${url} loaded=${before && before.loaded} pending=${before && before.pending} gated=${before && before.gated}`);
+          return;
+        }
         const data = await entry.session.captureSnapshot();
-        if (!captureQuality(await inspect(), requirement)) return;
-        this.writeSnapshotIfRicher(url, data, before.loaded);
+        if (!this.displayCaptureOk(await inspect())) { // turned grey/sparse mid-capture -> drop it
+          console.log(`CAPTCHA skip-capture url=${url} loaded=${before.loaded} reason=changed-after-capture`);
+          return;
+        }
+        // Newest clean capture wins (writeSnapshot still refuses a grey/too-small artifact), and
+        // the .n sidecar records the loaded-image count for observability and the serve-side guard.
+        if (this.writeSnapshot(url, data)) {
+          try { fs.writeFileSync(this.snapshotPath(url) + ".n", String(before.loaded), { mode: 0o600 }); }
+          catch (_) { /* best effort; the mhtml is already in place */ }
+          console.log(`CAPTCHA refreshed-snapshot url=${url} loaded=${before.loaded} bytes=${data.length}`);
+        } else {
+          console.log(`CAPTCHA skip-capture url=${url} loaded=${before.loaded} reason=artifact-not-clean`);
+        }
       } catch (_) { console.error("validated display snapshot capture failed"); }
       return;
     }

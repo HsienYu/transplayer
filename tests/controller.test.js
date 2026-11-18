@@ -772,6 +772,93 @@ test('validated live and snapshot-only modes share the accepted cache', () => {
   f.controller.snapshotOnly = true;
   assert(f.controller.hasSnapshot(REQUEST_URL));
 });
+
+// --- rc20: the LIVE display-refresh captures a clean lazy-load grid (loaded>=DISPLAY_CAPTURE_MIN),
+// newest clean capture wins, and a grey/incomplete page is never saved. ---
+// A driver whose CLEAN_CHECK_JS returns `clean`, QUALITY_JS returns {loaded,pending}, and the gate
+// check returns `gated`. `gatedSeq`, when given, returns successive gate values (to flip mid-capture).
+function qualityDriver({ clean = 100, loaded = 100, pending = 0, gated = false, gatedSeq } = {}) {
+  let g = 0;
+  return {
+    async getCurrentUrl() { return "https://www.google.com/search?q=x&udm=2"; },
+    async executeScript(s) {
+      if (String(s).includes("img[src")) return clean;               // CLEAN_CHECK_JS
+      if (String(s).includes("pending")) return { loaded, pending }; // QUALITY_JS
+      if (gatedSeq) return gatedSeq[Math.min(g++, gatedSeq.length - 1)];
+      return gated;                                                  // GATE_CHECK_JS
+    },
+  };
+}
+
+test("maybeCapture (validated) refreshes a clean lazy-load grid at loaded>=40 even with pending>0", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=explosion%20news&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[13] = { captureUrl: url,
+    driver: qualityDriver({ clean: 59, loaded: 59, pending: 41 }),
+    session: { captureSnapshot: async () => { captures++; return acceptedMhtml; } } };
+  await f.controller.maybeCapture(13);
+  assert.equal(captures, 1);                               // strict captureQuality (loaded>=100) would have skipped
+  assert(fsReal.existsSync(f.controller.snapshotPath(url)));
+  assert.equal(f.controller.snapshotLoadedCount(url), 59); // .n records the loaded count
+});
+
+test("maybeCapture (validated) skips a page below the DISPLAY_CAPTURE_MIN image floor", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=sparse&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[13] = { captureUrl: url,
+    driver: qualityDriver({ clean: 30, loaded: 30, pending: 5 }),
+    session: { captureSnapshot: async () => { captures++; return acceptedMhtml; } } };
+  await f.controller.maybeCapture(13);
+  assert.equal(captures, 0);                               // 30 < 40 -> not a full-enough page
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
+test("maybeCapture (validated) never captures a grey / gated page", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=grey&tbm=isch";
+  let captures = 0;
+  f.controller.browsers[13] = { captureUrl: url,
+    driver: qualityDriver({ clean: 0, loaded: 80, pending: 0, gated: true }),
+    session: { captureSnapshot: async () => { captures++; return acceptedMhtml; } } };
+  await f.controller.maybeCapture(13);
+  assert.equal(captures, 0);                               // gated -> never cached, whatever the counts
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
+test("maybeCapture (validated) drops a page that turns grey mid-capture", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = "https://www.google.com/search?q=flip&tbm=isch";
+  let captures = 0;
+  // Not gated on the first inspect (capture proceeds), gated on the re-check after capture.
+  f.controller.browsers[13] = { captureUrl: url,
+    driver: qualityDriver({ clean: 50, loaded: 50, pending: 5, gatedSeq: [false, true] }),
+    session: { captureSnapshot: async () => { captures++; return acceptedMhtml; } } };
+  await f.controller.maybeCapture(13);
+  assert.equal(captures, 1);                               // captured, but the re-check rejected it
+  assert(!fsReal.existsSync(f.controller.snapshotPath(url)));
+});
+
+test("maybeCapture (validated) newest clean capture overwrites a richer existing snapshot", async () => {
+  const f = snapFixture();
+  f.controller.validatedSnapshots = true;
+  const url = REQUEST_URL;
+  f.controller.writeSnapshot(url, acceptedMhtml);
+  fsReal.writeFileSync(f.controller.snapshotPath(url) + ".n", "300"); // pretend the existing one is very rich
+  const fresh = acceptedMhtml.replace("M".repeat(200000), "N".repeat(200000));
+  f.controller.browsers[13] = { captureUrl: url,
+    driver: qualityDriver({ clean: 45, loaded: 45, pending: 10 }),
+    session: { captureSnapshot: async () => fresh } };
+  await f.controller.maybeCapture(13);
+  assert(fsReal.readFileSync(f.controller.snapshotPath(url), "utf8").includes("N".repeat(200000)));
+  assert.equal(f.controller.snapshotLoadedCount(url), 45); // newest wins even though existing was richer
+});
+
 test('validated live readiness rejects incomplete and broken pages while accepting loaded results', async () => {
   const f = snapFixture(); f.controller.isCleanResults = async () => true;
   // VM controller dependencies resolve relative to this test; inject production policy module.
