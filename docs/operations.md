@@ -204,6 +204,15 @@ error popups over the wall:
   (`gsettings set com.ubuntu.update-notifier show-apport-crashes false`) and clear stale
   `/var/crash/*.crash` files so an old crash does not keep re-showing the dialog at login.
 
+For an exhibition run, harden the host so nothing pops over the wall or changes the system
+mid-show (all reversible): disable notification banners
+(`gsettings set org.gnome.desktop.notifications show-banners false`, plus `show-in-lock-screen
+false`); turn off apt auto-updates (`/etc/apt/apt.conf.d/20auto-upgrades` keys to `"0"`,
+`sudo systemctl disable --now unattended-upgrades.service apt-daily.timer
+apt-daily-upgrade.timer`); hold snap auto-refresh (`sudo snap refresh --hold`); and disable
+`fwupd-refresh.timer`. Trade-off: no automatic security updates until re-enabled, so patch
+manually during maintenance windows. Keep a dated backup of any edited config for rollback.
+
 ## Maintenance and recovery / 維護與回復
 
 在每個使用過 r10 的帳號，以目前登入環境執行：
