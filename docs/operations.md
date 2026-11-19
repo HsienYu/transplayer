@@ -182,6 +182,28 @@ PM2 原始日誌／dump 可能含個人路徑或環境資訊；僅在私有位�
 對外分享前獨立遮罩，禁止貼出完整 `pm2 jlist` 或憑證內容。
 錯誤碼 78 代表設定／平台／桌面尚未就緒，PM2 不對此無限重啟。
 
+### Boot-time notifications and the network race / 開機通知與連線競態
+
+On a kiosk host that auto-logs-in and autostarts playback, two boot-time items can surface
+error popups over the wall:
+
+- **GNOME "Connection failed / Activation of network connection failed" toast.** NetworkManager
+  autoconnects every saved profile at boot; any saved Wi-Fi the venue cannot reach fails
+  activation and GNOME shows it as a desktop notification. On a wired host, disable autoconnect on
+  those unusable Wi-Fi profiles so they are never tried:
+  `nmcli connection show` then
+  `sudo nmcli connection modify uuid <uuid> connection.autoconnect no` (reversible with
+  `autoconnect yes`; the profile is kept and can still be connected manually).
+
+- **A chrome "connection error" page or SIGSEGV at boot.** If the autostart entry
+  (`~/.config/autostart/transplayer-r10.desktop`) launches the player before
+  `network-online.target`, the first search hits a dead network — the page shows a connection
+  error and chrome can crash (a `/var/crash` dump then triggers the apport dialog). Make the
+  autostart wait for the network first, e.g. point its `Exec=` at a small wrapper that runs
+  `nm-online -s -t 60 || true` before launching the player. Keep apport popups off
+  (`gsettings set com.ubuntu.update-notifier show-apport-crashes false`) and clear stale
+  `/var/crash/*.crash` files so an old crash does not keep re-showing the dialog at login.
+
 ## Maintenance and recovery / 維護與回復
 
 在每個使用過 r10 的帳號，以目前登入環境執行：
